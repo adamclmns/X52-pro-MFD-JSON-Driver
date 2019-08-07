@@ -272,19 +272,9 @@ int DirectOutputFn::getCurrentPage()
 */
 void DirectOutputFn::handlePageChange()
 {
-	switch (currentPage)
+	if (0 <= currentPage && currentPage < 3) 
 	{
-	case 0:
-		updatePage(0);
-		break;
-	case 1:
-		updatePage(1);
-		break;
-	case 2:
-		updatePage(2);
-		break;
-	default:
-		break;
+		updatePage(currentPage);
 	}
 }
 
@@ -362,21 +352,14 @@ void DirectOutputFn::updatePageOnScroll(int oneUpZeroDown)
 	case 0:
 		if (oneUpZeroDown == 1)
 		{
-			jsonDataClass.pg0.currentLine--;
-			if (jsonDataClass.pg0.currentLine < 0)
-			{
-				jsonDataClass.pg0.currentLine = 9;
-			}
+			jsonDataClass.cmdr.currentLine--;
 		}
 		else if (oneUpZeroDown == 0)
 		{
-			jsonDataClass.pg0.currentLine++;
-			if (jsonDataClass.pg0.currentLine == 10)
-			{
-				jsonDataClass.pg0.currentLine = 0;
-			}
+			jsonDataClass.cmdr.currentLine++;
 		}
 		updatePage(0);
+		jsonDataClass.cmdr.currentLine = jsonDataClass.cmdr.currentLine % 10;
 		break;
 
 	case 1:
@@ -442,26 +425,18 @@ void DirectOutputFn::updatePage(int pageNumber)
 	wchar_t str0[64];
 	wchar_t str1[64];
 	wchar_t str2[64];
+	std::unique_ptr<JSONDataStructure::mdfPage> page;
+
 	switch (pageNumber)
 	{
 	case 0:
-		switch (jsonDataClass.pg0.currentLine)
+		page = jsonDataClass.getCmdrPage();
+		for (int i = 0; i < 3 && i < page->lines.size(); i++) 
 		{
-		case 8:
-			setString(0, 0, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine]);
-			setString(0, 1, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine + 1]);
-			setString(0, 2, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine - 8]);
-			break;
-		case 9:
-			setString(0, 0, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine]);
-			setString(0, 1, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine - 9]);
-			setString(0, 2, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine - 8]);
-			break;
-		default:
-			setString(0, 0, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine]);
-			setString(0, 1, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine + 1]);
-			setString(0, 2, jsonDataClass.pg0.cmdrPage0Info[jsonDataClass.pg0.currentLine + 2]);
-			break;
+			int idx = (page->currentLine + i) % page->lines.size();
+			std::wstring line = page->lines.at(idx);
+			wchar_t* wc = const_cast<wchar_t*>(line.c_str());
+			setString(pageNumber, i, wc);
 		}
 		break;
 	case 1:

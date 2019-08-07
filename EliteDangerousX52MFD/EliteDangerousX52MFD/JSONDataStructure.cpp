@@ -92,6 +92,28 @@ void JSONDataStructure::createMap()
 	eventsMap.emplace("VehicleSwitch", &JSONDataStructure::e_VehicleSwitch);			
 }
 
+std::unique_ptr<JSONDataStructure::mdfPage> JSONDataStructure::getCmdrPage()
+{
+
+	auto page = make_unique<JSONDataStructure::mdfPage>();
+
+	page->currentLine = cmdr.currentLine;
+	page->lines.push_back(L"Greetings CMDR");
+	page->lines.push_back(strToWStr(cmdr.name));
+	page->lines.push_back(strToWStr(cmdr.ship));
+	page->lines.push_back(strToWStr("CR: " + to_string(cmdr.creditBalance)));
+	
+	page->lines.push_back(strToWStr("COM: " + cmdr.combatRank));
+	page->lines.push_back(strToWStr("TRA: " + cmdr.tradeRank));
+	page->lines.push_back(strToWStr("EXP: " + cmdr.explorationRank));
+
+	page->lines.push_back(strToWStr("EMP: " + cmdr.empire));
+	page->lines.push_back(strToWStr("FED: " + cmdr.federation));
+	page->lines.push_back(strToWStr("CQC: " + cmdr.cqc));
+
+	return page;
+}
+
 /*
 	PARAMETERS: string str -> string value
 	RETURNS: wstring
@@ -104,12 +126,8 @@ std::wstring JSONDataStructure::strToWStr(std::string str)
 	return wStr;
 }
 
-void JSONDataStructure::copyCreditBalance()
-{
-	wcsncpy_s(pg0.cmdrPage0Info[3], strToWStr("CR: " + to_string(pg0.creditBalance)).c_str(), length);
-}
 
-std::string JSONDataStructure::formmatedShipName(std::string ship)
+std::string JSONDataStructure::formattedShipName(std::string ship)
 {
 	return ship; // already seems to be pretty formatted to me
 }
@@ -126,138 +144,84 @@ std::string JSONDataStructure::formmatedShipName(std::string ship)
 
 void JSONDataStructure::e_LoadGame(json::object_t obj)
 {
-	wcsncpy_s(pg0.cmdrPage0Info[0], L"Greetings CMDR", length);
-
 	// Key value checking if it exists otherwise, will crash
 	if (obj["Commander"].is_null() != true) {
-		wcsncpy_s(pg0.cmdrPage0Info[1], strToWStr(obj["Commander"]).c_str(), length);
+		cmdr.name = obj["Commander"].get<std::string>();
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[1], L"No Name", length);
+		cmdr.name = "No Name";
 	}
 
 	if (obj["Ship"].is_null() != true)
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[2], strToWStr(obj["Ship"]).c_str(), length);
+		cmdr.ship = obj["Ship"].get<std::string>();
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[2], L"No Ship", length);
+		cmdr.name = "No Ship";
 	}
 
 	if (obj["Credits"].is_null() != true)
 	{
-		pg0.creditBalance = (long long)obj["Credits"];
-		wcsncpy_s(pg0.cmdrPage0Info[3], strToWStr("CR: " + to_string((long)obj["Credits"])).c_str(), length);
-	}
-	else
-	{
-		wcsncpy_s(pg0.cmdrPage0Info[3], L"No Credits", length);
+		cmdr.creditBalance = (long long)obj["Credits"];
 	}
 }
 
 void JSONDataStructure::e_Rank(json::object_t obj)
 {
-	string combat = "Combat: ";
-	string trade = "Trade: ";
-	string exploration = "Exploration: ";
-	string empire = "Empire: ";
-	string federation = "Federation: ";
-	string cqc = "CQC: ";
-
 	if (obj["Combat"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (combat.length() + combatRank[obj["Combat"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[4], strToWStr(combat + combatRank[obj["Combat"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[4], strToWStr("C: " + combatRank[obj["Combat"]]).c_str(), length);
-		}
+		cmdr.combatRank = combatRank[obj["Combat"]];
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[4], L"No Combat Rank", length);
+		cmdr.combatRank = "No Combat Rank";
 	}
 
 	if (obj["Trade"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (trade.length() + tradeRank[obj["Trade"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[5], strToWStr(trade + tradeRank[obj["Trade"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[5], strToWStr("T: " + tradeRank[obj["Trade"]]).c_str(), length);
-		}
+		cmdr.tradeRank = tradeRank[obj["Trade"]];
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[5], L"No Trade Rank", length);
+		cmdr.tradeRank = "No Trade Rank";
 	}
 
 	if (obj["Explore"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (exploration.length() + explorerRank[obj["Explore"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[6], strToWStr(exploration + explorerRank[obj["Explore"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[6], strToWStr("EX: " + explorerRank[obj["Explore"]]).c_str(), length);
-		}
+		cmdr.explorationRank = explorerRank[obj["Explore"]];
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[6], L"No Explore Rank", length);
+		cmdr.explorationRank = "No Explore Rank";
 	}
 
 	if (obj["Empire"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (empire.length() + empireRank[obj["Empire"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[7], strToWStr(empire + empireRank[obj["Empire"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[7], strToWStr("EM: " + empireRank[obj["Empire"]]).c_str(), length);
-		}
+		cmdr.empire = empireRank[obj["Empire"]];
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[7], L"No Empire Rank", length);
+		cmdr.empire = "No Empire Rank";
 	}
 
 	if (obj["Federation"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (federation.length() + federationRank[obj["Federation"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[8], strToWStr(federation + federationRank[obj["Federation"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[8], strToWStr("F: " + federationRank[obj["Federation"]]).c_str(), length);
-		}
+		cmdr.federation = federationRank[obj["Federation"]];
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[8], L"No Fed Rank", length);
+		cmdr.federation = "No Fed Rank";
 	}
 
 	if (obj["CQC"].is_null() != true)
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[9], strToWStr(cqc + cqcRank[obj["CQC"]]).c_str(), length);
+		cmdr.cqc = cqcRank[obj["CQC"]];
 	}
 	else
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[9], L"No CQC Rank", length);
+		cmdr.cqc = "No CQC Rank";
 	}
 
 }
@@ -594,8 +558,7 @@ void JSONDataStructure::e_BuyExplorationData(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -607,18 +570,17 @@ void JSONDataStructure::e_SellExplorationData(nlohmann::json::object_t obj)
 	if (obj["BaseValue"].is_null() != true)
 	{
 		tempBaseValue = obj["BaseValue"];
-		pg0.creditBalance += obj["BaseValue"];
+		cmdr.creditBalance += obj["BaseValue"];
 	}
 
 	if (obj["Bonus"].is_null() != true)
 	{
 		tempBonus = obj["Bonus"];
-		pg0.creditBalance += obj["Bonus"];
+		cmdr.creditBalance += obj["Bonus"];
 	}
 
 	tempBalance = tempBaseValue + tempBonus;
-	pg0.creditBalance += tempBalance;
-	copyCreditBalance();
+	cmdr.creditBalance += tempBalance;
 }
 
 void JSONDataStructure::e_BuyTradeData(nlohmann::json::object_t obj)
@@ -626,8 +588,7 @@ void JSONDataStructure::e_BuyTradeData(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -636,8 +597,7 @@ void JSONDataStructure::e_MarketBuy(nlohmann::json::object_t obj)
 	if (obj["TotalCost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["TotalCost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -646,8 +606,7 @@ void JSONDataStructure::e_MarketSell(nlohmann::json::object_t obj)
 	if (obj["TotalSale"].is_null() != true)
 	{
 		signed long int tempBalance = obj["TotalSale"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -656,8 +615,7 @@ void JSONDataStructure::e_BuyAmmo(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -666,8 +624,7 @@ void JSONDataStructure::e_BuyDrones(nlohmann::json::object_t obj)
 	if (obj["TotalCost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["TotalCost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -676,8 +633,7 @@ void JSONDataStructure::e_CommunityGoalReward(nlohmann::json::object_t obj)
 	if (obj["Reward"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Reward"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -686,8 +642,7 @@ void JSONDataStructure::e_CrewHire(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -696,8 +651,7 @@ void JSONDataStructure::e_FetchRemoteModule(nlohmann::json::object_t obj)
 	if (obj["TransferCost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["TransferCost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -720,13 +674,11 @@ void JSONDataStructure::e_MissionCompleted(nlohmann::json::object_t obj)
 	tempBalance = tempReward + tempDonation;
 	if (tempBalance < 0)
 	{
-		pg0.creditBalance -= abs(tempBalance);
-		copyCreditBalance();
+		cmdr.creditBalance -= abs(tempBalance);
 	}
 	else
 	{
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -750,13 +702,11 @@ void JSONDataStructure::e_ModuleBuy(nlohmann::json::object_t obj)
 	tempBalance = tempBuy + tempSell;
 	if (tempBalance < 0)
 	{
-		pg0.creditBalance -= abs(tempBalance);
-		copyCreditBalance();
+		cmdr.creditBalance -= abs(tempBalance);
 	}
 	else
 	{
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -765,8 +715,7 @@ void JSONDataStructure::e_ModuleSell(nlohmann::json::object_t obj)
 	if (obj["SellPrice"].is_null() != true)
 	{
 		signed long int tempBalance = obj["SellPrice"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -775,8 +724,7 @@ void JSONDataStructure::e_ModuleSellRemote(nlohmann::json::object_t obj)
 	if (obj["SellPrice"].is_null() != true)
 	{
 		signed long int tempBalance = obj["SellPrice"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -785,8 +733,7 @@ void JSONDataStructure::e_PayFines(nlohmann::json::object_t obj)
 	if (obj["Amount"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Amount"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -795,8 +742,7 @@ void JSONDataStructure::e_PayLegacyFines(nlohmann::json::object_t obj)
 	if (obj["Amount"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Amount"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -805,8 +751,7 @@ void JSONDataStructure::e_RedeemVoucher(nlohmann::json::object_t obj)
 	if (obj["Amount"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Amount"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -815,8 +760,7 @@ void JSONDataStructure::e_RefuelAll(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -825,8 +769,7 @@ void JSONDataStructure::e_RefuelPartial(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -835,8 +778,7 @@ void JSONDataStructure::e_Repair(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -845,8 +787,7 @@ void JSONDataStructure::e_RepairAll(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -855,8 +796,7 @@ void JSONDataStructure::e_RestockVehicle(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -865,8 +805,7 @@ void JSONDataStructure::e_SellDrones(nlohmann::json::object_t obj)
 	if (obj["TotalSale"].is_null() != true)
 	{
 		signed long int tempBalance = obj["TotalSale"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -892,7 +831,7 @@ void JSONDataStructure::e_ShipyardBuy(nlohmann::json::object_t obj)
 			if (obj["ShipType"].is_null() != true)
 			{
 				string temp = obj["ShipType"];
-				wcsncpy_s(pg0.cmdrPage0Info[2], strToWStr(formmatedShipName(temp)).c_str(), length);
+				cmdr.ship = temp;
 			}
 		}
 	}
@@ -900,13 +839,11 @@ void JSONDataStructure::e_ShipyardBuy(nlohmann::json::object_t obj)
 	tempBalance = tempBuy + tempSell;
 	if (tempBalance < 0)
 	{
-		pg0.creditBalance -= abs(tempBalance);
-		copyCreditBalance();
+		cmdr.creditBalance -= abs(tempBalance);
 	}
 	else
 	{
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -915,8 +852,7 @@ void JSONDataStructure::e_ShipyardSell(nlohmann::json::object_t obj)
 	if (obj["ShipPrice"].is_null() != true)
 	{
 		signed long int tempBalance = obj["ShipPrice"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -925,8 +861,7 @@ void JSONDataStructure::e_ShipyardTransfer(nlohmann::json::object_t obj)
 	if (obj["TransferPrice"].is_null() != true)
 	{
 		signed long int tempBalance = obj["TransferPrice"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -936,7 +871,7 @@ void JSONDataStructure::e_ShipyardSwap(json::object_t obj)
 	if (obj["ShipType"].is_null() != true)
 	{
 		string temp = obj["ShipType"];
-		wcsncpy_s(pg0.cmdrPage0Info[2], strToWStr(formmatedShipName(temp)).c_str(), length);
+		cmdr.ship = temp;
 	}
 }
 
@@ -945,8 +880,7 @@ void JSONDataStructure::e_PowerplayFastTrack(nlohmann::json::object_t obj)
 	if (obj["Cost"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Cost"];
-		pg0.creditBalance -= tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance -= tempBalance;
 	}
 }
 
@@ -955,8 +889,7 @@ void JSONDataStructure::e_PowerplaySalary(nlohmann::json::object_t obj)
 	if (obj["Amount"].is_null() != true)
 	{
 		signed long int tempBalance = obj["Amount"];
-		pg0.creditBalance += tempBalance;
-		copyCreditBalance();
+		cmdr.creditBalance += tempBalance;
 	}
 }
 
@@ -969,16 +902,17 @@ void JSONDataStructure::e_Continued(json::object_t obj)
 void JSONDataStructure::e_DockFighter(json::object_t obj)
 {
 	// Restore mothership name if fighter was docked by player control
-	if (pg0.playerControlFighter)
+	if (cmdr.playerControlFighter)
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[2], pg0.mothership, length);
+		cmdr.ship = cmdr.mothership;
+		cmdr.playerControlFighter = false;
 	}
 }
 
 void JSONDataStructure::e_DockSRV(json::object_t obj)
 {
 	// Restore mothership name
-	wcsncpy_s(pg0.cmdrPage0Info[2], pg0.mothership, length);
+	cmdr.ship = cmdr.mothership;
 }
 
 void JSONDataStructure::e_LaunchFighter(json::object_t obj)
@@ -989,12 +923,10 @@ void JSONDataStructure::e_LaunchFighter(json::object_t obj)
 		if ((bool)obj["PlayerControlled"])
 		{
 			// Save the current Mothership name
-			wcsncpy_s(pg0.mothership, pg0.cmdrPage0Info[2], length);
-
+			cmdr.mothership = cmdr.ship;
 			// Change ship name to Fighter
-			wcsncpy_s(pg0.cmdrPage0Info[2], L"Fighter", length);
-
-			pg0.playerControlFighter = true;
+			cmdr.ship = "Fighter";
+			cmdr.playerControlFighter = true;
 		}
 	}
 }
@@ -1002,10 +934,9 @@ void JSONDataStructure::e_LaunchFighter(json::object_t obj)
 void JSONDataStructure::e_LaunchSRV(json::object_t obj)
 {
 	// Save current mothership name
-	wcsncpy_s(pg0.mothership, pg0.cmdrPage0Info[2], length);
-
+	cmdr.mothership = cmdr.ship;
 	// Change ship name to SRV
-	wcsncpy_s(pg0.cmdrPage0Info[2], L"SRV", length);
+	cmdr.ship = "SRV";
 }
 
 void JSONDataStructure::e_Promotion(json::object_t obj)
@@ -1014,49 +945,25 @@ void JSONDataStructure::e_Promotion(json::object_t obj)
 	string trade = "Trade: ";
 	string exploration = "Exploration: ";
 	string cqc = "CQC: ";
-	
+
 	if (obj["Combat"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (combat.length() + combatRank[obj["Combat"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[4], strToWStr(combat + combatRank[obj["Combat"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[4], strToWStr("C: " + combatRank[obj["Combat"]]).c_str(), length);
-		}
+		cmdr.combatRank = combatRank[obj["Combat"]];
 	}
 
 	if (obj["Trade"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (trade.length() + tradeRank[obj["Trade"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[5], strToWStr(trade + tradeRank[obj["Trade"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[5], strToWStr("T: " + tradeRank[obj["Trade"]]).c_str(), length);
-		}
+		cmdr.tradeRank = tradeRank[obj["Trade"]];
 	}
 
 	if (obj["Explore"].is_null() != true)
 	{
-		// Determine lengths if shorthand is needed
-		if (exploration.length() + explorerRank[obj["Explore"]].length() <= 16)
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[6], strToWStr(exploration + explorerRank[obj["Explore"]]).c_str(), length);
-		}
-		else
-		{
-			wcsncpy_s(pg0.cmdrPage0Info[6], strToWStr("EX: " + explorerRank[obj["Explore"]]).c_str(), length);
-		}
+		cmdr.explorationRank = explorerRank[obj["Explore"]];
 	}
 
 	if (obj["CQC"].is_null() != true)
 	{
-		wcsncpy_s(pg0.cmdrPage0Info[9], strToWStr(cqc + cqcRank[obj["CQC"]]).c_str(), length);
+		cmdr.cqc = cqcRank[obj["CQC"]];
 	}
 }
 
@@ -1069,15 +976,14 @@ void JSONDataStructure::e_VehicleSwitch(json::object_t obj)
 		if (shipSwitch == "Fighter")
 		{
 			// Save mothership name
-			wcsncpy_s(pg0.mothership, pg0.cmdrPage0Info[2], length);
-
+			cmdr.mothership = cmdr.ship;
 			// Ship name to fighter
-			wcsncpy_s(pg0.cmdrPage0Info[2], L"Fighter", length);
+			cmdr.ship = "Fighter";
 		}
 		else if (shipSwitch == "Mothership")
 		{
 			// Restore mothership name
-			wcsncpy_s(pg0.cmdrPage0Info[2], pg0.mothership, length);
+			cmdr.ship = cmdr.mothership;
 		}
 	}
 }

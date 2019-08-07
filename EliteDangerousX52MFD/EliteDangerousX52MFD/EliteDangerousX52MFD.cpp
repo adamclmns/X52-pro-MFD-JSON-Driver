@@ -90,7 +90,7 @@ int main()
 	checkHR(fn.registerPageCallback());
 	cout << "Setup Complete.\n\n";
 
-	// Add 5 pages
+	// Add 3 pages
 	for (int i = 0; i < 3; i++)
 	{
 		if (i == 0)
@@ -133,7 +133,7 @@ int main()
 	jsonDataClass.continueEvent = false;
 
 	// Set all line numbers to 0
-	jsonDataClass.pg0.currentLine = 0;
+	jsonDataClass.cmdr.currentLine = 0;
 	jsonDataClass.pg1.currentLine = 0;
 	jsonDataClass.pg2.currentLine = 0;
 

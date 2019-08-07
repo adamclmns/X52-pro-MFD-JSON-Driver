@@ -1,34 +1,51 @@
 #pragma once
-#include "DirectOutputFn.h"
 #include <unordered_map>
+#include "DirectOutputFn.h"
 #include "DepInclude\json.hpp"
 
 class JSONDataStructure
 {
 	typedef std::vector<std::wstring> v_strList;
 
+	
+
 public:
 	void readStoreJSON(std::string eventString);
 	void createMap();
 
+
 	bool continueEvent;
 	unsigned int readLine;
 
-	/*
-		--- Commander Data ---
-		Name
-		Ship
-		Credits
-		Ranks
-	*/
-	struct mfdPage0
+	typedef struct mdfPage_t
 	{
 		int currentLine;
+		v_strList lines;
+	} mdfPage;
+
+	std::unique_ptr<JSONDataStructure::mdfPage> getCmdrPage();
+
+	struct cmdrInfo {
+		int currentLine;
+
+		std::string name;
+		std::string ship;
 		long long creditBalance;
-		wchar_t mothership[64];
+
+		std::string combatRank;
+		std::string tradeRank;
+		std::string explorationRank;
+
+		std::string empire;
+		std::string federation;
+		std::string cqc;
+
+		// non-printed fields
 		bool playerControlFighter;
-		wchar_t cmdrPage0Info[10][64];
-	}; mfdPage0 pg0;
+		std::string mothership;
+
+	}; cmdrInfo cmdr;
+
 
 	/*
 		--- Location Based Data ---
@@ -148,7 +165,7 @@ private:
 
 	std::wstring strToWStr(std::string str);
 	void copyCreditBalance();
-	std::string formmatedShipName(std::string ship);
+	std::string formattedShipName(std::string ship);
 
 	// Journal functions										Location
 	void e_LoadGame(nlohmann::json::object_t obj);				// 3.3
