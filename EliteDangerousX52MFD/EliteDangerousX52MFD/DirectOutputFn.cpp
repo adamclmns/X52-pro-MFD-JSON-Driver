@@ -328,89 +328,58 @@ void __stdcall DirectOutputFn::OnPageChanged(void * hDevice, DWORD dwPage, bool 
 void __stdcall DirectOutputFn::OnSoftButtonChanged(void * hDevice, DWORD dwButtons, void * pCtxt)
 {
 	DirectOutputFn* pThis = (DirectOutputFn*)pCtxt;
-	if (dwButtons & 0x00000002)
+	if (dwButtons & SoftButton_Up)
+	{
+		pThis->updatePageOnScroll(-1);
+	}
+	else if (dwButtons & SoftButton_Down)
 	{
 		pThis->updatePageOnScroll(1);
-	}
-	else if (dwButtons & 0x0000004)
-	{
-		pThis->updatePageOnScroll(0);
 	}
 }
 
 /*
-	PARAMETERS: int oneUpZeroDown -> int value to determine if the user wants to scroll down or up. Value of 1 will scroll up, value of zero will scroll down.
+	PARAMETERS: int direction -> int value to determine if the user wants to scroll down or up. Value of 1 will scroll down, value of -1 will scroll up.
 	RETURNS: none
 
-	FUNCTION: Updates the current page based on the scroll function of the right wheel. A value of 1 passed in will change the strings presented from 1,2,3 to 0,1,2. A value of 0 passed in will scroll down 0,1,2 to 1,2,3. This behavior replicates a scroll wheel on the mouse.
-				Needs to be on a page by page case switch since each is independent.
+	FUNCTION: Updates the current page based on the scroll function of the right wheel. 
 */
-void DirectOutputFn::updatePageOnScroll(int oneUpZeroDown)
+void DirectOutputFn::updatePageOnScroll(int direction)
 {
 	switch (currentPage)
 	{
 	case 0:
-		if (oneUpZeroDown == 1)
-		{
-			jsonDataClass.cmdr.currentLine--;
-		}
-		else if (oneUpZeroDown == 0)
-		{
-			jsonDataClass.cmdr.currentLine++;
-		}
-		updatePage(0);
+		jsonDataClass.cmdr.currentLine += direction;
 		jsonDataClass.cmdr.currentLine = jsonDataClass.cmdr.currentLine % 10;
 		break;
-
 	case 1:
-		if (jsonDataClass.pg1.cmdrPage1Info.size() > 3)
+		if (jsonDataClass.pg1.lines.size() > 3)
 		{
-			if (oneUpZeroDown == 1)
-			{
-				jsonDataClass.pg1.currentLine--;
-				if (jsonDataClass.pg1.currentLine < 0)
-				{
-					jsonDataClass.pg1.currentLine = jsonDataClass.pg1.cmdrPage1Info.size() - 1;
-				}
-			}
-			else if (oneUpZeroDown == 0)
-			{
-				jsonDataClass.pg1.currentLine++;
-				if (jsonDataClass.pg1.currentLine == jsonDataClass.pg1.cmdrPage1Info.size())
-				{
-					jsonDataClass.pg1.currentLine = 0;
-				}
-			}
-			updatePage(1);
+			jsonDataClass.pg1.currentLine += direction;
+			jsonDataClass.pg1.currentLine = jsonDataClass.pg1.currentLine % jsonDataClass.pg1.lines.size();
+		}
+		else
+		{
+			jsonDataClass.pg1.currentLine = 0;
 		}
 		break;
 
 	case 2:
-		if (jsonDataClass.pg2.cmdrPage2Info.size() > 3)
+		if (jsonDataClass.pg2.lines.size() > 3)
 		{
-			if (oneUpZeroDown == 1)
-			{
-				jsonDataClass.pg2.currentLine--;
-				if (jsonDataClass.pg2.currentLine < 0)
-				{
-					jsonDataClass.pg2.currentLine = jsonDataClass.pg2.cmdrPage2Info.size() - 1;
-				}
-			}
-			else if (oneUpZeroDown == 0)
-			{
-				jsonDataClass.pg2.currentLine++;
-				if (jsonDataClass.pg2.currentLine == jsonDataClass.pg2.cmdrPage2Info.size())
-				{
-					jsonDataClass.pg2.currentLine = 0;
-				}
-			}
-			updatePage(2);
+			jsonDataClass.pg2.currentLine += direction;
+			jsonDataClass.pg2.currentLine = jsonDataClass.pg2.currentLine % jsonDataClass.pg2.lines.size();
+		}
+		else
+		{
+			jsonDataClass.pg2.currentLine = 0;
 		}
 		break;
 
 	default:
 		break;
 	}
+	updatePage(currentPage);
 }
 
 /*
@@ -421,118 +390,33 @@ void DirectOutputFn::updatePageOnScroll(int oneUpZeroDown)
 */
 void DirectOutputFn::updatePage(int pageNumber)
 {
-	int length = 64;
-	wchar_t str0[64];
-	wchar_t str1[64];
-	wchar_t str2[64];
 	std::unique_ptr<JSONDataStructure::mdfPage> page;
-
 	switch (pageNumber)
 	{
 	case 0:
 		page = jsonDataClass.getCmdrPage();
-		for (int i = 0; i < 3 && i < page->lines.size(); i++) 
-		{
-			int idx = (page->currentLine + i) % page->lines.size();
-			std::wstring line = page->lines.at(idx);
-			wchar_t* wc = const_cast<wchar_t*>(line.c_str());
-			setString(pageNumber, i, wc);
-		}
 		break;
 	case 1:
-		if (jsonDataClass.pg1.cmdrPage1Info.size() != 0)
-		{
-			int vectorSize = jsonDataClass.pg1.cmdrPage1Info.size();
-			if (vectorSize == 1)
-			{
-				wcsncpy_s(str0, jsonDataClass.pg1.cmdrPage1Info.at(jsonDataClass.pg1.currentLine).c_str(), length);
-				str1[0] = '\0';
-				str2[0] = '\0';
-			}
-			else if (vectorSize == 2)
-			{
-				wcsncpy_s(str0, jsonDataClass.pg1.cmdrPage1Info.at(jsonDataClass.pg1.currentLine).c_str(), length);
-				wcsncpy_s(str1, jsonDataClass.pg1.cmdrPage1Info.at(jsonDataClass.pg1.currentLine + 1).c_str(), length);
-				str2[0] = '\0';
-			}
-			else if (vectorSize == 3)
-			{
-				wcsncpy_s(str0, jsonDataClass.pg1.cmdrPage1Info.at(jsonDataClass.pg1.currentLine).c_str(), length);
-				wcsncpy_s(str1, jsonDataClass.pg1.cmdrPage1Info.at(jsonDataClass.pg1.currentLine + 1).c_str(), length);
-				wcsncpy_s(str2, jsonDataClass.pg1.cmdrPage1Info.at(jsonDataClass.pg1.currentLine + 2).c_str(), length);
-			}
-			else
-			{
-				int lineNumber = jsonDataClass.pg1.currentLine;
-				wcsncpy_s(str0, jsonDataClass.pg1.cmdrPage1Info.at(lineNumber).c_str(), length);
-				lineNumber++;
-				if (lineNumber == jsonDataClass.pg1.cmdrPage1Info.size())
-				{
-					lineNumber = 0;
-				}
-				wcsncpy_s(str1, jsonDataClass.pg1.cmdrPage1Info.at(lineNumber).c_str(), length);
-				lineNumber++;
-				if (lineNumber == jsonDataClass.pg1.cmdrPage1Info.size())
-				{
-					lineNumber = 0;
-				}
-				wcsncpy_s(str2, jsonDataClass.pg1.cmdrPage1Info.at(lineNumber).c_str(), length);
-			}
-			setString(1, 0, str0);
-			setString(1, 1, str1);
-			setString(1, 2, str2);
-		}
+		page = jsonDataClass.getLocationPage();
 		break;
 	case 2:
-		if (jsonDataClass.pg2.cmdrPage2Info.size() != 0)
-		{
-			int vectorSize = jsonDataClass.pg2.cmdrPage2Info.size();
-			if (vectorSize == 1)
-			{
-				wcsncpy_s(str0, jsonDataClass.pg2.cmdrPage2Info.at(jsonDataClass.pg2.currentLine).c_str(), length);
-				str1[0] = '\0';
-				str2[0] = '\0';
-			}
-			else if (vectorSize == 2)
-			{
-				wcsncpy_s(str0, jsonDataClass.pg2.cmdrPage2Info.at(jsonDataClass.pg2.currentLine).c_str(), length);
-				wcsncpy_s(str1, jsonDataClass.pg2.cmdrPage2Info.at(jsonDataClass.pg2.currentLine + 1).c_str(), length);
-				str2[0] = '\0';
-			}
-			else if (vectorSize == 3)
-			{
-				wcsncpy_s(str0, jsonDataClass.pg2.cmdrPage2Info.at(jsonDataClass.pg2.currentLine).c_str(), length);
-				wcsncpy_s(str1, jsonDataClass.pg2.cmdrPage2Info.at(jsonDataClass.pg2.currentLine + 1).c_str(), length);
-				wcsncpy_s(str2, jsonDataClass.pg2.cmdrPage2Info.at(jsonDataClass.pg2.currentLine + 2).c_str(), length);
-			}
-			else
-			{
-				int lineNumber = jsonDataClass.pg2.currentLine;
-				wcsncpy_s(str0, jsonDataClass.pg2.cmdrPage2Info.at(lineNumber).c_str(), length);
-				lineNumber++;
-				if (lineNumber == jsonDataClass.pg2.cmdrPage2Info.size())
-				{
-					lineNumber = 0;
-				}
-				wcsncpy_s(str1, jsonDataClass.pg2.cmdrPage2Info.at(lineNumber).c_str(), length);
-				lineNumber++;
-				if (lineNumber == jsonDataClass.pg2.cmdrPage2Info.size())
-				{
-					lineNumber = 0;
-				}
-				wcsncpy_s(str2, jsonDataClass.pg2.cmdrPage2Info.at(lineNumber).c_str(), length);
-			}
-			setString(2, 0, str0);
-			setString(2, 1, str1);
-			setString(2, 2, str2);
-		}
-		else
-		{
-			wcsncpy_s(str0, L"No Scan Data", length);
-			setString(2, 0, str0);
-		}
-		break;
-	default:
+		page = jsonDataClass.getExplorationPage();
 		break;
 	}
+
+	// Set the lines we are looking for
+	for (int i = 0; i < 3 && i < page->lines.size(); i++)
+	{
+		int idx = (page->currentLine + i) % page->lines.size();
+		std::wstring line = page->lines.at(idx);
+		wchar_t* wc = const_cast<wchar_t*>(line.c_str());
+		setString(pageNumber, i, wc);
+	}
+
+	// fill any remaining lines with blanks
+	for (int i = page->lines.size(); i < 3; i++) {
+		setString(pageNumber, i, L"");
+	}
+
+
 }

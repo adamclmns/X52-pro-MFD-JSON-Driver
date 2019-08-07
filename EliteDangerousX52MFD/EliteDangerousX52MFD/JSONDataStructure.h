@@ -24,6 +24,8 @@ public:
 	} mdfPage;
 
 	std::unique_ptr<JSONDataStructure::mdfPage> getCmdrPage();
+	std::unique_ptr<JSONDataStructure::mdfPage> getLocationPage();
+	std::unique_ptr<JSONDataStructure::mdfPage> getExplorationPage();
 
 	struct cmdrInfo {
 		int currentLine;
@@ -46,6 +48,11 @@ public:
 
 	}; cmdrInfo cmdr;
 
+	struct locationInfo {
+		std::string lastKnownBody;
+	}; 
+	locationInfo locExtra;
+
 
 	/*
 		--- Location Based Data ---
@@ -61,7 +68,7 @@ public:
 	{
 		int currentLine;
 		std::string lastKnownBody = "";
-		v_strList cmdrPage1Info;
+		v_strList lines;
 	}; mfdPage1 pg1;
 
 	/*
@@ -77,7 +84,7 @@ public:
 	struct mfdPage2
 	{
 		int currentLine;
-		v_strList cmdrPage2Info;
+		v_strList lines;
 	}; mfdPage2 pg2;
 
 	// Ranks are listed on 11.1 Ranks of Journal Manual
