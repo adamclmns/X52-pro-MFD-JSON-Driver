@@ -14,6 +14,14 @@
 #include "DirectOutputFn.h"
 #include "JSONReader.h"
 
+#include <filesystem>
+
+
+#include <locale>
+#include <codecvt>
+#include <string>
+
+
 
 // DirectOutput function object
 // Creation of this object automatically loads in DirectOutput but it still needs to be initialized
@@ -26,7 +34,6 @@ TCHAR journalFolderpath[260];
 TCHAR currentJournal[260];
 
 std::string inputFile;
-std::string profileFile;
 
 // Instance checking
 bool foundProfile = false;
@@ -36,7 +43,12 @@ bool closeOnWindowX = false;
 void initDirectOutput();
 void checkHR(HRESULT hr);
 
-void waitForJournalUpdate();
+void registerFileChangeHandler(std::string filename, std::function<void()> handler);
+
+void onFileChanged();
+
+
+
 void cleanupAndClose();
 BOOL controlHandler(DWORD fdwCtrlType);
 
@@ -46,6 +58,7 @@ int main(int argc, char** argv)
 	// Setup control handling, if app is closed by other means. (Ctrl + C or hitting the 'X' button)
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE)controlHandler, TRUE);
 
+	
 
 	cxxopts::Options options("X52MDF-JSON-DRIVER", "Helps drive a X52 PRO MDF from a JSON file");
 	options
@@ -55,12 +68,11 @@ int main(int argc, char** argv)
 
 	options.add_options()
 		("h,help", "Print help")
-		("p,profile", "Profile file to load", cxxopts::value<std::string>(), "FILE")
 		("input", "Input JSON file to monitor", cxxopts::value<std::vector<std::string>>(), "FILE")
 		;
 
 	options.parse_positional({"input"});
-
+	
 	auto args = options.parse(argc, argv);
 
 	if (args.count("help"))
@@ -75,19 +87,14 @@ int main(int argc, char** argv)
 		exit(0);
 	}
 
-	if (args.count("profile"))
-	{
-		profileFile = args["profile"].as<std::string>();
-	}
 
 	initDirectOutput();
 
-	inputFile = args["input"].as<std::vector<std::string>>().at(0);
+	inputFile = args["input"].as<std::vector<std::string>>()[0];
 	std::cout << "Reading from JSON file = " << inputFile << std::endl;	
-	auto data = reader::ReadJSONFile(inputFile);
-
-	fn.SetOrUpdateDisplayData(std::move(data));
-
+	
+	onFileChanged(); // initial load
+	registerFileChangeHandler(inputFile, onFileChanged);
 
 	std::cout << "\nPress ENTER to close this application.";
 	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -95,6 +102,14 @@ int main(int argc, char** argv)
 	return 0;
 }
 
+
+void onFileChanged()
+{
+
+	auto data = reader::ReadJSONFile(inputFile);
+
+	fn.SetOrUpdateDisplayData(std::move(data));
+}
 
 void initDirectOutput()
 {
@@ -110,25 +125,6 @@ void initDirectOutput()
 		std::cout << "\nPress ENTER to close this application.";
 		std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 		ExitProcess(0);
-	}
-
-	//TODO(pbirk): Move profile setup here
-	// Set the profile, if provided
-	if (profileFile.length() > 0)
-	{
-		std::ifstream profile(profileFile);
-		if (profile.good()) {
-			checkHR(fn.setDeviceProfile(profileFile));
-		}
-		else
-		{
-			std::cout << "Couldn't link a profile from nonexisting file " << profileFile << std::endl;
-		}
-		
-	}
-	else
-	{
-		std::cout << "Couldn't link a profile since one was not provided!" << std::endl;
 	}
 
 	// Register right soft button clicks and scrolls
@@ -161,19 +157,23 @@ void checkHR(HRESULT hr)
 	}
 }
 
-/*
-	PARAMETERS: none
-	RETURNS: none
 
-	FUNCTION: This function will set a associated to when a file changes in the directory. This is useful so the program won't continually read the journal hogging resources. It will wait until there is a change in information.
-*/
-void waitForJournalUpdate()
+
+void registerFileChangeHandler(std::string filename, std::function<void()> handler)
 {
+
 	DWORD dwWaitStatus;
 	HANDLE dwChangeHandle;
 
-	// Watch for new Journal creations
-	dwChangeHandle = FindFirstChangeNotification(journalFolderpath, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
+	PWSTR folderbuf[1024];
+
+	auto filepath = std::filesystem::path(filename);
+
+	auto folderpath = filepath.remove_filename();
+	LPCWSTR pFilename = folderpath.native().c_str();
+	
+	dwChangeHandle = FindFirstChangeNotificationW(pFilename, FALSE, FILE_NOTIFY_CHANGE_LAST_WRITE);
+
 	if (dwChangeHandle == INVALID_HANDLE_VALUE)
 	{
 		printf("\nFindFirstChangeNotification failed.\n");
@@ -188,56 +188,46 @@ void waitForJournalUpdate()
 		ExitProcess(GetLastError());
 	}
 
-	// Open up the journal in a stream for file size checking
-	long prevPos;
-	if (currentJournal[0] != _T('\0'))
-	{
-		std::ifstream journalFile(currentJournal, std::ios::binary | std::ios::ate);
-		prevPos = journalFile.tellg();
-		journalFile.close();
-	}
+	auto prevModifyTime = std::filesystem::file_time_type::min();
 
-	// Waiting and detecting changes
-	bool changeDetected = false;
-	while (!changeDetected)
+	while (true)
 	{
-		dwWaitStatus = WaitForSingleObject(dwChangeHandle, 1000);
+		dwWaitStatus = WaitForSingleObject(dwChangeHandle, INFINITE);
+		
 		switch (dwWaitStatus)
 		{
-		/*
-			FILE_NOTIFY_CHANGE_FILE_NAME
-			Runs when a file is added to the directory. I'll be using this if the player exits to the main menu and restarts the game.
-			A new journal should be created.
-		*/
+			/*
+				FILE_NOTIFY_CHANGE_FILE_NAME
+				Runs when a file is added to the directory. I'll be using this if the player exits to the main menu and restarts the game.
+				A new journal should be created.
+			*/
 		case WAIT_OBJECT_0:
-			// Write to file was detected
-			changeDetected = true;
+		{
+			// Write to some file was detected - check if it was ours
+
+			// Some events triggered when the file is flushed to empty.
+			// reading empty files is bad for your health, so skip those events.
+			std::ifstream file(filename);
+			bool empty = file.peek() == std::ifstream::traits_type::eof();
+			file.close();
+			if (!empty) {
+				auto modifytime = std::filesystem::last_write_time(filename);
+
+				if (modifytime > prevModifyTime) {
+					prevModifyTime = modifytime;
+					handler(); // trigger the handler
+				}
+			}
+
+
 			if (FindNextChangeNotification(dwChangeHandle) == FALSE)
 			{
 				printf("\nFindFirstChangeNotification failed.\n");
 				ExitProcess(GetLastError());
 			}
 			break;
-
-		/*
-			After doing some research on the forum on the journal this is the method I have to use to determine if the file has been modified.
-			I'll have to check to see if the file size has changed once every second and if so there has been an update.
-
-			Apparently they are writing to the file by flushing the stream and I have no idea how to detect that.
-			Previously I would use a wait object above but for file writes and it wasn't being detected unless I manually back out and enter the journal folder.
-		*/
-		case WAIT_TIMEOUT:
-			if (currentJournal[0] != _T('\0'))
-			{
-				std::ifstream journalFile(currentJournal, std::ios::binary | std::ios::ate);
-				long newPos = journalFile.tellg();
-				journalFile.close();
-				if (newPos > prevPos)
-				{
-					changeDetected = true;
-				}
-			}
-			break;
+		}
+			
 
 		default:
 			printf("\nUnhandled dwWaitStatus\n");
@@ -245,8 +235,11 @@ void waitForJournalUpdate()
 			break;
 		}
 	}
+
 	FindCloseChangeNotification(dwChangeHandle);
+
 }
+
 
 /*
 	PARAMETERS: none

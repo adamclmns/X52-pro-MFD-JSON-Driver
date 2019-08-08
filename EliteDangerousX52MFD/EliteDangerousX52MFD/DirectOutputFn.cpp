@@ -52,6 +52,9 @@ DirectOutputFn::~DirectOutputFn()
 
 void DirectOutputFn::SetOrUpdateDisplayData(std::unique_ptr<mfdData> data)
 {
+	if (data->pages.size() == 0) {
+		return;
+	}
 	displayData = std::move(data);
 	if (currentPageLine.size() == 0) {
 		// This is clearly the first time we initialize, so we need to set up the pages we want

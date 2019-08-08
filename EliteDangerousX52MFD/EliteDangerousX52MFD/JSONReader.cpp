@@ -4,6 +4,8 @@ namespace reader
 {
 	std::unique_ptr<mfdData> ReadJSONFile(std::string filename)
 	{
+		auto data = std::make_unique<mfdData>();
+
 		std::ifstream infile(filename);
 		if (!infile.good())
 		{
@@ -11,10 +13,19 @@ namespace reader
 			ExitProcess(EXIT_FAILURE);
 		}
 
+		bool empty = infile.peek() == std::ifstream::traits_type::eof();
+
+		if (empty)
+		{
+			std::cout << "Unable to read from empty file" << std::endl;
+			infile.close();
+			return data;
+		}
+
 		json json;
 		infile >> json;
+		infile.close();
 
-		auto data = std::make_unique<mfdData>();
 
 		auto pages = json["pages"].get<std::vector<json::object_t>>();
 		for (auto& page : pages)
