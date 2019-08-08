@@ -5,9 +5,9 @@
 
 std::wstring strToWStr(std::string str)
 {
-	// This is bad and wrong!
-	std::wstring wStr = std::wstring(str.begin(), str.end());
-	return wStr;
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+	std::wstring wide = converter.from_bytes(str);
+	return wide;
 }
 
 

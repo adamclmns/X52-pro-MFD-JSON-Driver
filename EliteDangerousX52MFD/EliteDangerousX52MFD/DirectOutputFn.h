@@ -3,6 +3,10 @@
 #include "displaydata.h"
 #include <algorithm>
 
+#include <locale>
+#include <codecvt>
+#include <string>
+
 class DirectOutputFn
 {
 	typedef std::vector<void*> DeviceList;
