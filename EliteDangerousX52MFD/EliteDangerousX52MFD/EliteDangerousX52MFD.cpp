@@ -165,8 +165,6 @@ void registerFileChangeHandler(std::string filename, std::function<void()> handl
 	DWORD dwWaitStatus;
 	HANDLE dwChangeHandle;
 
-	PWSTR folderbuf[1024];
-
 	auto filepath = std::filesystem::path(filename);
 
 	auto folderpath = filepath.remove_filename();

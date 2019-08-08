@@ -27,9 +27,6 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="JSONDataStructure.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="JSONReader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -45,9 +42,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="DirectOutputFn.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="JSONDataStructure.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="JSONReader.cpp">

@@ -206,7 +206,6 @@
   <ItemGroup>
     <ClInclude Include="DirectOutputFn.h" />
     <ClInclude Include="displaydata.h" />
-    <ClInclude Include="JSONDataStructure.h" />
     <ClInclude Include="JSONReader.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
@@ -215,7 +214,6 @@
   <ItemGroup>
     <ClCompile Include="DirectOutputFn.cpp" />
     <ClCompile Include="EliteDangerousX52MFD.cpp" />
-    <ClCompile Include="JSONDataStructure.cpp" />
     <ClCompile Include="JSONReader.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

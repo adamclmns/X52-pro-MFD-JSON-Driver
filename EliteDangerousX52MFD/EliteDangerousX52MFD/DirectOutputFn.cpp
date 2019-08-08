@@ -53,7 +53,7 @@ DirectOutputFn::~DirectOutputFn()
 void DirectOutputFn::SetOrUpdateDisplayData(std::unique_ptr<mfdData> data)
 {
 	if (data->pages.size() == 0) {
-		return;
+		return; 
 	}
 	displayData = std::move(data);
 	if (currentPageLine.size() == 0) {
