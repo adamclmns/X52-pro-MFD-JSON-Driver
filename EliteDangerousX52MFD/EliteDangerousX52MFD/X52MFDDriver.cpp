@@ -1,7 +1,7 @@
-// X52MFDDriver.cpp : Entry point
+// EliteDangerousX52MFD.cpp : Entry point
 
 /*
-	X52MFDDriver v 0.9.0
+	EliteDangerousX52MFD v 1.1.2
 	Special Thanks to:
 		Frontier Developments for Elite Dangerous
 		Saitek for the use and development of the SDK to run this project
@@ -26,8 +26,17 @@
 // Creation of this object automatically loads in DirectOutput but it still needs to be initialized
 DirectOutputFn fn;
 
+// Text filepath holders
+TCHAR profileFilepath[260];
+TCHAR defaultDirectory[260];
+TCHAR journalFolderpath[260];
+TCHAR currentJournal[260];
+
 std::string inputFile;
 
+// Instance checking
+bool foundProfile = false;
+bool closeOnWindowX = false;
 
 // Internal Functions
 void initDirectOutput();
@@ -95,7 +104,9 @@ int main(int argc, char** argv)
 
 void onFileChanged()
 {
+
 	auto data = reader::ReadJSONFile(inputFile);
+
 	fn.SetOrUpdateDisplayData(std::move(data));
 }
 
@@ -240,7 +251,6 @@ void cleanupAndClose() {
 
 	// Deinitialize DirectOutput
 	checkHR(fn.Deinitialize());
-	ExitProcess(0);
 }
 
 /*
@@ -254,11 +264,13 @@ BOOL controlHandler(DWORD fdwCtrlType) {
 	{
 		// Handle the CTRL-C signal. 
 	case CTRL_C_EVENT:
+		closeOnWindowX = true;
 		cleanupAndClose();
 		return(TRUE);
 
 		// CTRL-CLOSE: confirm that the user wants to exit on 'X' button click on window. 
 	case CTRL_CLOSE_EVENT:
+		closeOnWindowX = true;
 		cleanupAndClose();
 		return(TRUE);
 
