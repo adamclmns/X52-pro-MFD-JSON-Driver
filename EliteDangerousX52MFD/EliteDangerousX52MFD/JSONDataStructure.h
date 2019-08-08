@@ -1,5 +1,7 @@
 #pragma once
 #include <unordered_map>
+#include <map>
+#include <vector>
 #include "DirectOutputFn.h"
 #include "DepInclude\json.hpp"
 
@@ -10,6 +12,9 @@ class JSONDataStructure
 	
 
 public:
+
+	static const int PAGES = 4;
+
 	void readStoreJSON(std::string eventString);
 	void createMap();
 
@@ -26,6 +31,7 @@ public:
 	std::unique_ptr<JSONDataStructure::mdfPage> getCmdrPage();
 	std::unique_ptr<JSONDataStructure::mdfPage> getLocationPage();
 	std::unique_ptr<JSONDataStructure::mdfPage> getExplorationPage();
+	std::unique_ptr<JSONDataStructure::mdfPage> getCargoPage();
 
 	struct cmdrInfo {
 		int currentLine;
@@ -64,12 +70,12 @@ public:
 
 		(^ = if current data doesn't exist push up and replace)
 	*/
-	struct mfdPage1
+	struct locPage
 	{
 		int currentLine;
 		std::string lastKnownBody = "";
 		v_strList lines;
-	}; mfdPage1 pg1;
+	}; locPage loc;
 
 	/*
 		--- Scan Data ---
@@ -81,11 +87,18 @@ public:
 		^TerraformState
 		^Volcanism
 	*/
-	struct mfdPage2
-	{
+	mdfPage expl;
+
+	struct cargoPage {
 		int currentLine;
-		v_strList lines;
-	}; mfdPage2 pg2;
+
+		int capacity;
+		int currentCargo;
+
+		std::map<std::string, int> store;
+	};
+	cargoPage cargo;
+
 
 	// Ranks are listed on 11.1 Ranks of Journal Manual
 	std::string combatRank[9] = {
@@ -171,11 +184,12 @@ private:
 	int length = 64;
 
 	std::wstring strToWStr(std::string str);
-	void copyCreditBalance();
 	std::string formattedShipName(std::string ship);
 
 	// Journal functions										Location
 	void e_LoadGame(nlohmann::json::object_t obj);				// 3.3
+	void e_Loadout(nlohmann::json::object_t obj);
+	void e_Cargo(nlohmann::json::object_t obj);
 	void e_Rank(nlohmann::json::object_t obj);					// 3.5
 	void e_Docked(nlohmann::json::object_t obj);				// 4.1
 	void e_DockingGranted(nlohmann::json::object_t obj);		// 4.4

@@ -42,7 +42,9 @@ void JSONDataStructure::readStoreJSON(std::string eventString)
 */
 void JSONDataStructure::createMap()
 {																						
-	eventsMap.emplace("LoadGame", &JSONDataStructure::e_LoadGame);						
+	eventsMap.emplace("LoadGame", &JSONDataStructure::e_LoadGame);			
+	eventsMap.emplace("Loadout", &JSONDataStructure::e_Loadout);			
+	eventsMap.emplace("Cargo", &JSONDataStructure::e_Cargo);			
 	eventsMap.emplace("Rank", &JSONDataStructure::e_Rank);								
 	eventsMap.emplace("Docked", &JSONDataStructure::e_Docked);							
 	eventsMap.emplace("DockingGranted", &JSONDataStructure::e_DockingGranted);			
@@ -119,8 +121,8 @@ std::unique_ptr<JSONDataStructure::mdfPage> JSONDataStructure::getLocationPage()
 
 	auto page = make_unique<JSONDataStructure::mdfPage>();
 
-	page->currentLine = pg1.currentLine;
-	for (auto const& line : pg1.lines)
+	page->currentLine = loc.currentLine;
+	for (auto const& line : loc.lines)
 	{
 		page->lines.push_back(line);
 	}
@@ -133,13 +135,28 @@ std::unique_ptr<JSONDataStructure::mdfPage> JSONDataStructure::getExplorationPag
 
 	auto page = make_unique<JSONDataStructure::mdfPage>();
 
-	page->currentLine = pg2.currentLine;
-	for (auto const& line : pg2.lines)
+	page->currentLine = expl.currentLine;
+	for (auto const& line : expl.lines)
 	{
 		page->lines.push_back(line);
 	}
 	if (page->lines.size() == 0) {
 		page->lines.push_back(L"No Exploration Data");
+	}
+
+	return page;
+}
+
+std::unique_ptr<JSONDataStructure::mdfPage> JSONDataStructure::getCargoPage()
+{
+	auto page = make_unique<JSONDataStructure::mdfPage>();
+	page->currentLine = cargo.currentLine;
+
+	page->lines.push_back(L"Cargo: " + to_wstring(cargo.currentCargo) + L"/" + to_wstring(cargo.capacity));
+
+	for (auto const& item : cargo.store)
+	{
+		page->lines.push_back(strToWStr(item.first) + L": " + to_wstring(item.second));
 	}
 
 	return page;
@@ -197,6 +214,38 @@ void JSONDataStructure::e_LoadGame(json::object_t obj)
 	if (obj["Credits"].is_null() != true)
 	{
 		cmdr.creditBalance = (long long)obj["Credits"];
+	}
+}
+
+void JSONDataStructure::e_Loadout(json::object_t obj)
+{
+	cargo.capacity = obj["CargoCapacity"];
+}
+
+void JSONDataStructure::e_Cargo(json::object_t obj)
+{
+	auto inventory = obj["Inventory"];
+	if (inventory.is_null())
+	{
+		return;
+	}
+
+	
+
+	for (auto& item : inventory)
+	{
+		std::string name;
+		int amount = item["Count"];
+		if(!item["Name_Localized"].is_null())
+		{
+			name = item["Name_Localized"].get<std::string>();
+		}
+		else
+		{
+			name = item["Name"].get<std::string>();
+		}
+		cargo.store.emplace(name, amount);
+		cargo.currentCargo += amount;
 	}
 }
 
@@ -261,92 +310,92 @@ void JSONDataStructure::e_Rank(json::object_t obj)
 void JSONDataStructure::e_Docked(json::object_t obj)
 {
 	// Clear out the vector
-	pg1.lines.clear();
+	loc.lines.clear();
 
 	// Reset currentLine
-	pg1.currentLine = 0;
+	loc.currentLine = 0;
 
 	if (obj["StarSystem"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
 	}
 
 	if (obj["StationName"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StationName"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StationName"]).c_str());
 	}
 
 	if (obj["StationType"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StationType"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StationType"]).c_str());
 	}
 
-	pg1.lines.push_back(strToWStr("Docked").c_str());
+	loc.lines.push_back(strToWStr("Docked").c_str());
 
 }
 
 void JSONDataStructure::e_DockingGranted(json::object_t obj)
 {
 	// Store the starsystem as it will be needed after clearing
-	wstring starsystem = pg1.lines[0];
+	wstring starsystem = loc.lines[0];
 
 	// Clear vector and reset the current line
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
 	// Push back the starsystem
-	pg1.lines.push_back(starsystem);
+	loc.lines.push_back(starsystem);
 
 	// Get new info
 	if (obj["StationName"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StationName"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StationName"]).c_str());
 	}
 
 	if (obj["LandingPad"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr("LP -> " + to_string((int)obj["LandingPad"])).c_str());
+		loc.lines.push_back(strToWStr("LP -> " + to_string((int)obj["LandingPad"])).c_str());
 	}
 }
 
 void JSONDataStructure::e_FSDJump(json::object_t obj)
 {
 	// Clear the vector and reset the currentline
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
 	// Get new info
 	if (obj["StarSystem"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
 	}
 
-	pg1.lines.push_back(strToWStr("In Supercruise").c_str());
+	loc.lines.push_back(strToWStr("In Supercruise").c_str());
 
 }
 
 void JSONDataStructure::e_Liftoff(nlohmann::json::object_t obj)
 {
-	wstring starsystem = pg1.lines[0];
-	wstring body = pg1.lines[1];
+	wstring starsystem = loc.lines[0];
+	wstring body = loc.lines[1];
 
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
-	pg1.lines.push_back(starsystem);
-	pg1.lines.push_back(body);
+	loc.lines.push_back(starsystem);
+	loc.lines.push_back(body);
 }
 
 void JSONDataStructure::e_Location(json::object_t obj)
 {
 	// Clear vector and reset the currentline
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
 	// Get new info
 	if (obj["StarSystem"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
 	}
 
 	// Determine docked status
@@ -357,22 +406,22 @@ void JSONDataStructure::e_Location(json::object_t obj)
 			// Get StationName and StationType since player is docked
 			if (obj["StationName"].is_null() != true)
 			{
-				pg1.lines.push_back(strToWStr(obj["StationName"]).c_str());
+				loc.lines.push_back(strToWStr(obj["StationName"]).c_str());
 			}
 			if (obj["StationType"].is_null() != true)
 			{
-				pg1.lines.push_back(strToWStr(obj["StationType"]).c_str());
+				loc.lines.push_back(strToWStr(obj["StationType"]).c_str());
 			}
-			pg1.lines.push_back(strToWStr("Docked").c_str());
+			loc.lines.push_back(strToWStr("Docked").c_str());
 		}
 		else
 		{
 			// Not docked. Get Body and BodyType
 			if (obj["Body"].is_null() != true)
 			{
-				pg1.lines.push_back(strToWStr(obj["Body"]).c_str());
+				loc.lines.push_back(strToWStr(obj["Body"]).c_str());
 				std::string tempStr = obj["Body"];
-				pg1.lastKnownBody = tempStr;
+				loc.lastKnownBody = tempStr;
 			}
 			if (obj["BodyType"].is_null() != true)
 			{
@@ -380,11 +429,11 @@ void JSONDataStructure::e_Location(json::object_t obj)
 				string bodyType = obj["BodyType"];
 				if (bodyType.empty())
 				{
-					pg1.lines.push_back(strToWStr("Barycenter").c_str());
+					loc.lines.push_back(strToWStr("Barycenter").c_str());
 				}
 				else
 				{
-					pg1.lines.push_back(strToWStr(bodyType).c_str());
+					loc.lines.push_back(strToWStr(bodyType).c_str());
 				}
 			}
 		}
@@ -394,34 +443,34 @@ void JSONDataStructure::e_Location(json::object_t obj)
 void JSONDataStructure::e_SupercruiseEntry(json::object_t obj)
 {
 	// Clear vector and reset currentline
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
 	// Get new data
 	if (obj["StarSystem"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
-		pg1.lines.push_back(strToWStr("In Supercruise").c_str());
+		loc.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
+		loc.lines.push_back(strToWStr("In Supercruise").c_str());
 	}
 }
 
 void JSONDataStructure::e_SupercruiseExit(json::object_t obj)
 {
 	// Clear the vector and reset currentline
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
 	// Get new data
 	if (obj["StarSystem"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StarSystem"]).c_str());
 	}
 
 	if (obj["Body"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["Body"]).c_str());
+		loc.lines.push_back(strToWStr(obj["Body"]).c_str());
 		std::string tempStr = obj["Body"];
-		pg1.lastKnownBody = tempStr;
+		loc.lastKnownBody = tempStr;
 	}
 
 	if (obj["BodyType"].is_null() != true)
@@ -430,11 +479,11 @@ void JSONDataStructure::e_SupercruiseExit(json::object_t obj)
 		string bodyType = obj["BodyType"];
 		if (bodyType.empty())
 		{
-			pg1.lines.push_back(strToWStr("Barycenter").c_str());
+			loc.lines.push_back(strToWStr("Barycenter").c_str());
 		}
 		else
 		{
-			pg1.lines.push_back(strToWStr(bodyType).c_str());
+			loc.lines.push_back(strToWStr(bodyType).c_str());
 		}
 	}
 }
@@ -444,20 +493,20 @@ void JSONDataStructure::e_Touchdown(json::object_t obj)
 	// Check to see if a starsystem has already been logged. (Vector should be populated) 
 	// If there hasn't been a previously saved system, the player might have already started in SRV mode and the "Location" should be read next.
 	// Otherwise, if the vector is not empty, get correct info.
-	if (!pg1.lines.empty())
+	if (!loc.lines.empty())
 	{
 		// Get the starsystem
-		wstring starsystem = pg1.lines[0];
+		wstring starsystem = loc.lines[0];
 
 		// Clear vector and reset currentline
-		pg1.lines.clear();
-		pg1.currentLine = 0;
+		loc.lines.clear();
+		loc.currentLine = 0;
 
 		// Write back starsystem and body
-		pg1.lines.push_back(starsystem);
-		if (!pg1.lastKnownBody.empty())
+		loc.lines.push_back(starsystem);
+		if (!loc.lastKnownBody.empty())
 		{
-			pg1.lines.push_back(strToWStr(pg1.lastKnownBody).c_str());
+			loc.lines.push_back(strToWStr(loc.lastKnownBody).c_str());
 		}
 
 		// Get new latitude and longitude data
@@ -467,11 +516,11 @@ void JSONDataStructure::e_Touchdown(json::object_t obj)
 			ss << fixed << setprecision(5) << (float)obj["Latitude"];
 			if ((float)obj["Latitude"] < 0)
 			{
-				pg1.lines.push_back(strToWStr("Lat:" + ss.str()).c_str());
+				loc.lines.push_back(strToWStr("Lat:" + ss.str()).c_str());
 			}
 			else
 			{
-				pg1.lines.push_back(strToWStr("Lat: " + ss.str()).c_str());
+				loc.lines.push_back(strToWStr("Lat: " + ss.str()).c_str());
 			}
 		}
 
@@ -481,11 +530,11 @@ void JSONDataStructure::e_Touchdown(json::object_t obj)
 			ss << fixed << setprecision(5) << (float)obj["Longitude"];
 			if ((float)obj["Longitude"] < 0)
 			{
-				pg1.lines.push_back(strToWStr("Lon:" + ss.str()).c_str());
+				loc.lines.push_back(strToWStr("Lon:" + ss.str()).c_str());
 			}
 			else
 			{
-				pg1.lines.push_back(strToWStr("Lon: " + ss.str()).c_str());
+				loc.lines.push_back(strToWStr("Lon: " + ss.str()).c_str());
 			}
 		}
 	}
@@ -494,32 +543,32 @@ void JSONDataStructure::e_Touchdown(json::object_t obj)
 void JSONDataStructure::e_Undocked(json::object_t obj)
 {
 	// Get the starsystem
-	wstring starsystem = pg1.lines[0];
+	wstring starsystem = loc.lines[0];
 
 	// Clear the vector and reset currentline
-	pg1.lines.clear();
-	pg1.currentLine = 0;
+	loc.lines.clear();
+	loc.currentLine = 0;
 
 	// Write back starsystem
-	pg1.lines.push_back(starsystem);
+	loc.lines.push_back(starsystem);
 
 	// Get new data
 	if (obj["StationName"].is_null() != true)
 	{
-		pg1.lines.push_back(strToWStr(obj["StationName"]).c_str());
+		loc.lines.push_back(strToWStr(obj["StationName"]).c_str());
 	}
 }
 
 void JSONDataStructure::e_Scan(json::object_t obj)
 {
 	// Clear the vector and reset the currentline
-	pg2.lines.clear();
-	pg2.currentLine = 0;
+	expl.lines.clear();
+	expl.currentLine = 0;
 
 	// Get new data
 	if (obj["BodyName"].is_null() != true)
 	{
-		pg2.lines.push_back(strToWStr(obj["BodyName"]).c_str());
+		expl.lines.push_back(strToWStr(obj["BodyName"]).c_str());
 	}
 
 	if (obj["StarType"].is_null() != true)
@@ -527,12 +576,12 @@ void JSONDataStructure::e_Scan(json::object_t obj)
 		string temp0 = obj["StarType"];
 		string temp1 = "Class: ";
 		temp1 = temp1 + temp0;
-		pg2.lines.push_back(strToWStr(temp1).c_str());
+		expl.lines.push_back(strToWStr(temp1).c_str());
 	}
 
 	if (obj["PlanetClass"].is_null() != true)
 	{
-		pg2.lines.push_back(strToWStr(obj["PlanetClass"]).c_str());
+		expl.lines.push_back(strToWStr(obj["PlanetClass"]).c_str());
 	}
 
 	if (obj["Landable"].is_null() != true)
@@ -540,11 +589,11 @@ void JSONDataStructure::e_Scan(json::object_t obj)
 		bool isLandable = (bool)obj["Landable"];
 		if (isLandable)
 		{
-			pg2.lines.push_back(strToWStr("Landable").c_str());
+			expl.lines.push_back(strToWStr("Landable").c_str());
 		}
 		else
 		{
-			pg2.lines.push_back(strToWStr("Not Landable").c_str());
+			expl.lines.push_back(strToWStr("Not Landable").c_str());
 		}
 	}
 
@@ -554,7 +603,7 @@ void JSONDataStructure::e_Scan(json::object_t obj)
 		gravity = gravity / 9.81;
 		stringstream ss;
 		ss << fixed << setprecision(2) << gravity;
-		pg2.lines.push_back(strToWStr(ss.str() + " G").c_str());
+		expl.lines.push_back(strToWStr(ss.str() + " G").c_str());
 	}
 
 	if (obj["Atmosphere"].is_null() != true)
@@ -562,7 +611,7 @@ void JSONDataStructure::e_Scan(json::object_t obj)
 		string atmoStr = obj["Atmosphere"];
 		if (!atmoStr.empty())
 		{
-			pg2.lines.push_back(strToWStr(obj["Atmosphere"]).c_str());
+			expl.lines.push_back(strToWStr(obj["Atmosphere"]).c_str());
 		}
 	}
 
@@ -571,7 +620,7 @@ void JSONDataStructure::e_Scan(json::object_t obj)
 		string terraStr = obj["TerraformState"];
 		if (!terraStr.empty())
 		{
-			pg2.lines.push_back(strToWStr(terraStr).c_str());
+			expl.lines.push_back(strToWStr(terraStr).c_str());
 		}
 	}
 
@@ -580,7 +629,7 @@ void JSONDataStructure::e_Scan(json::object_t obj)
 		string volStr = obj["TerraformState"];
 		if (!volStr.empty())
 		{
-			pg2.lines.push_back(strToWStr(obj["Volcanism"]).c_str());
+			expl.lines.push_back(strToWStr(obj["Volcanism"]).c_str());
 		}
 	}
 }

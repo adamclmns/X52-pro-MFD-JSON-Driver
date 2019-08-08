@@ -272,7 +272,7 @@ int DirectOutputFn::getCurrentPage()
 */
 void DirectOutputFn::handlePageChange()
 {
-	if (0 <= currentPage && currentPage < 3) 
+	if (0 <= currentPage && currentPage < JSONDataStructure::PAGES) 
 	{
 		updatePage(currentPage);
 	}
@@ -346,6 +346,7 @@ void __stdcall DirectOutputFn::OnSoftButtonChanged(void * hDevice, DWORD dwButto
 */
 void DirectOutputFn::updatePageOnScroll(int direction)
 {
+	int lines;
 	switch (currentPage)
 	{
 	case 0:
@@ -353,27 +354,42 @@ void DirectOutputFn::updatePageOnScroll(int direction)
 		jsonDataClass.cmdr.currentLine = jsonDataClass.cmdr.currentLine % 10;
 		break;
 	case 1:
-		if (jsonDataClass.pg1.lines.size() > 3)
+		if (jsonDataClass.loc.lines.size() > 3)
 		{
-			jsonDataClass.pg1.currentLine += direction;
-			jsonDataClass.pg1.currentLine = jsonDataClass.pg1.currentLine % jsonDataClass.pg1.lines.size();
+			jsonDataClass.loc.currentLine += direction;
+			jsonDataClass.loc.currentLine = jsonDataClass.loc.currentLine % jsonDataClass.loc.lines.size();
 		}
 		else
 		{
-			jsonDataClass.pg1.currentLine = 0;
+			jsonDataClass.loc.currentLine = 0;
 		}
 		break;
 
 	case 2:
-		if (jsonDataClass.pg2.lines.size() > 3)
+		lines = jsonDataClass.getExplorationPage()->lines.size();
+		if (lines > 3)
 		{
-			jsonDataClass.pg2.currentLine += direction;
-			jsonDataClass.pg2.currentLine = jsonDataClass.pg2.currentLine % jsonDataClass.pg2.lines.size();
+			jsonDataClass.expl.currentLine += direction;
+			jsonDataClass.expl.currentLine = jsonDataClass.expl.currentLine % lines;
 		}
 		else
 		{
-			jsonDataClass.pg2.currentLine = 0;
+			jsonDataClass.expl.currentLine = 0;
 		}
+		break;
+
+	case 3:
+		lines = jsonDataClass.getCargoPage()->lines.size();
+		if (lines > 3)
+		{
+			jsonDataClass.cargo.currentLine += direction;
+			jsonDataClass.cargo.currentLine = jsonDataClass.cargo.currentLine % lines;
+		}
+		else
+		{
+			jsonDataClass.cargo.currentLine = 0;
+		}
+		break;
 		break;
 
 	default:
@@ -401,6 +417,9 @@ void DirectOutputFn::updatePage(int pageNumber)
 		break;
 	case 2:
 		page = jsonDataClass.getExplorationPage();
+		break;
+	case 3:
+		page = jsonDataClass.getCargoPage();
 		break;
 	}
 

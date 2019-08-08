@@ -90,8 +90,8 @@ int main()
 	checkHR(fn.registerPageCallback());
 	cout << "Setup Complete.\n\n";
 
-	// Add 3 pages
-	for (int i = 0; i < 3; i++)
+	// Add pages
+	for (int i = 0; i < JSONDataStructure::PAGES; i++)
 	{
 		if (i == 0)
 		{
@@ -116,7 +116,7 @@ int main()
 
 	// Determine initial file name of the Journal
 	determineJournalFilepath();
-
+	/*
 	// Determine if the current journal found could be the latest
 	if (!determineWriteTime())
 	{
@@ -125,7 +125,7 @@ int main()
 		waitForJournalUpdate();
 		cout << "Got latest Journal." << endl;
 	}
-
+	*/
 	// Start first file reading from first line
 	jsonDataClass.readLine = 0;
 
@@ -134,8 +134,8 @@ int main()
 
 	// Set all line numbers to 0
 	jsonDataClass.cmdr.currentLine = 0;
-	jsonDataClass.pg1.currentLine = 0;
-	jsonDataClass.pg2.currentLine = 0;
+	jsonDataClass.loc.currentLine = 0;
+	jsonDataClass.expl.currentLine = 0;
 
 	// Main loop
 	do
