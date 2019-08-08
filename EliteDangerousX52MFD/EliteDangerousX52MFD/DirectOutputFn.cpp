@@ -1,41 +1,77 @@
 // DirectOutputFn.cpp : Contains all the functions used to communicate with the X52 Pro MFD
 #include "stdafx.h"
 #include "DirectOutputFn.h"
-#include "JSONDataStructure.h"
 
-using namespace std;
+
+std::wstring strToWStr(std::string str)
+{
+	// This is bad and wrong!
+	std::wstring wStr = std::wstring(str.begin(), str.end());
+	return wStr;
+}
+
 
 // Constructor -> Loads in DirectOutput.dll
 DirectOutputFn::DirectOutputFn()
 {
-	cout << "Loading DirectOutput libaray... ";
+	hr = S_OK;
+	currentPage = 0;
+
+	std::cout << "Loading DirectOutput libaray... ";
 
 	dll = LoadLibrary(TEXT("DepInclude/DirectOutput.dll"));
 	if (NULL != dll)
 	{
-		cout << "DONE.\n";
+		std::cout << "DONE.\n";
 	}
 	else
 	{
-		cout << "FAILED.\n";
+		std::cout << "FAILED.\n";
 	}
+
+
 }
 
 // Deconstructor -> Frees DirectOutput.dll
 DirectOutputFn::~DirectOutputFn()
 {
-	cout << "Freeing DirectOutput library... ";
+	std::cout << "Freeing DirectOutput library... ";
 	if (!FreeLibrary(dll))
 	{
-		cout << "FAILED.\n";
+		std::cout << "FAILED.\n";
 	}
 	else
 	{
-		cout << "DONE.\n";
+		std::cout << "DONE.\n";
 	}
 }
 
+
 // Public Functions
+
+
+void DirectOutputFn::SetOrUpdateDisplayData(std::unique_ptr<mfdData> data)
+{
+	displayData = std::move(data);
+	if (currentPageLine.size() == 0) {
+		// This is clearly the first time we initialize, so we need to set up the pages we want
+		currentPage = 0;
+		for(int i = 0; i < displayData->pages.size(); ++i)
+		{ 
+			setPage(i, i == 0 ? FLAG_SET_AS_ACTIVE : 0); // set first page active
+			currentPageLine.push_back(0);
+		}
+
+	}
+
+	for (int i = 0; i < currentPageLine.size(); ++i)
+	{
+		// re-clamp all pages to the max number of lines
+		updatePageLine(i, currentPageLine[i]);
+	}
+
+	refresDisplay();
+}
 
 /*
 	PARAMETERS: const wchar_t * wszPluginName = Name of this application
@@ -45,7 +81,7 @@ DirectOutputFn::~DirectOutputFn()
 */
 HRESULT DirectOutputFn::Initialize(const wchar_t * wszPluginName)
 {
-	cout << "Initialzing DirectOutput library... ";
+	std::cout << "Initialzing DirectOutput library... " << std::endl;
 
 	Pfn_DirectOutput_Initialize initDOFn = (Pfn_DirectOutput_Initialize)GetProcAddress(dll, "DirectOutput_Initialize");
 	hr = initDOFn(wszPluginName);
@@ -61,7 +97,7 @@ HRESULT DirectOutputFn::Initialize(const wchar_t * wszPluginName)
 */
 HRESULT DirectOutputFn::Deinitialize()
 {
-	cout << "Deinitializing DirectOutput... ";
+	std::cout << "Deinitializing DirectOutput... " << std::endl;
 	Pfn_DirectOutput_Deinitialize deInitfunc = (Pfn_DirectOutput_Deinitialize)GetProcAddress(dll, "DirectOutput_Deinitialize");
 	hr = deInitfunc();
 
@@ -76,28 +112,28 @@ HRESULT DirectOutputFn::Deinitialize()
 */
 void DirectOutputFn::RegisterDevice()
 {
-	cout << "Registering device callback... ";
+	std::cout << "Registering device callback... " << std::endl;
 	Pfn_DirectOutput_RegisterDeviceCallback fnRegisterDeviceCallback = (Pfn_DirectOutput_RegisterDeviceCallback)GetProcAddress(dll, "DirectOutput_RegisterDeviceCallback");
 	hr = fnRegisterDeviceCallback(OnDeviceChanged, this);
 	if (hr == S_OK)
 	{
-		cout << "DONE.\n";
+		std::cout << "DONE.\n";
 	}
 	else
 	{
-		cout << "FAILED.\n";
+		std::cout << "FAILED.\n";
 	}
 
-	cout << "Enumerating devices... ";
+	std::cout << "Enumerating devices... " << std::endl;
 	Pfn_DirectOutput_Enumerate fnEnumerate = (Pfn_DirectOutput_Enumerate)GetProcAddress(dll, "DirectOutput_Enumerate");
 	hr = fnEnumerate(OnEnumerateDevice, this);
 	if (FAILED(hr))
 	{
-		cout << "FAILED.\n";
+		std::cout << "FAILED.\n";
 	}
 	else
 	{
-		cout << "DONE.\n";
+		std::cout << "DONE.\n";
 	}
 }
 
@@ -109,13 +145,13 @@ void DirectOutputFn::RegisterDevice()
 */
 bool DirectOutputFn::GetDeviceType()
 {
-	cout << "Getting device... ";
+	std::cout << "Getting device... " << std::endl;
 	Pfn_DirectOutput_GetDeviceType fnGetDeviceType = (Pfn_DirectOutput_GetDeviceType)GetProcAddress(dll, "DirectOutput_GetDeviceType");
 	GUID typeGUID = { 0 };
 	if (m_devices.size() == 0)
 	{
-		cout << "The controller is not connected or is not a X52 Pro.\n";
-		cout << "Please close the application and plug in the controller. Then restart the application.\n";
+		std::cout << "The controller is not connected or is not a X52 Pro.\n";
+		std::cout << "Please close the application and plug in the controller. Then restart the application.\n";
 		return false;
 	}
 	for (DeviceList::iterator it = m_devices.begin(); it != m_devices.end(); it++)
@@ -123,13 +159,13 @@ bool DirectOutputFn::GetDeviceType()
 		hr = fnGetDeviceType(*it, &typeGUID);
 		if (FAILED(hr))
 		{
-			cout << "FAILED.\n";
+			std::cout << "FAILED.\n";
 			return false;
 		}
 
 		if (typeGUID == DeviceType_X52Pro)
 		{
-			cout << "Got device X52Pro.\n";
+			std::cout << "Got device X52Pro.\n";
 			return true;
 		}
 	}
@@ -142,13 +178,14 @@ bool DirectOutputFn::GetDeviceType()
 
 	FUNCTION: Sets the X52 Pro to the desired profile. This might be unneccessary as I will only be using the screen functions at the moment and not changing any keybindings or lights
 */
-HRESULT DirectOutputFn::setDeviceProfile(wchar_t* filepath)
+HRESULT DirectOutputFn::setDeviceProfile(std::string file)
 {
-	cout << "Setting the device profile... ";
+	std::cout << "Setting the device profile... " << std::endl;
 	Pfn_DirectOutput_SetProfile fnSetProfile = (Pfn_DirectOutput_SetProfile)GetProcAddress(dll, "DirectOutput_SetProfile");
 	void * hdevice = m_devices[0];
-	size_t size = wcslen(filepath);
-	hr = fnSetProfile(hdevice, size, filepath);
+	std::wstring filepath = strToWStr(file);
+	size_t size = wcslen(filepath.c_str());
+	hr = fnSetProfile(hdevice, size, filepath.c_str());
 	return hr;
 }
 
@@ -165,7 +202,7 @@ HRESULT DirectOutputFn::setDeviceProfile(wchar_t* filepath)
 
 HRESULT DirectOutputFn::setPage(int pageNumber, const DWORD flag)
 {
-	cout << "Adding page... ";
+	std::cout << "Adding page... " << std::endl;
 	Pfn_DirectOutput_AddPage fnSetPage = (Pfn_DirectOutput_AddPage)GetProcAddress(dll, "DirectOutput_AddPage");
 	void * hdevice = m_devices[0];
 	hr = fnSetPage(hdevice, pageNumber, flag);
@@ -202,7 +239,7 @@ HRESULT DirectOutputFn::setString(int pageNumber, int stringLineID, wchar_t * st
 */
 HRESULT DirectOutputFn::registerSoftBtnCallback()
 {
-	cout << "Registering soft button callback... ";
+	std::cout << "Registering soft button callback... " << std::endl;
 	Pfn_DirectOutput_RegisterSoftButtonCallback fnRegSoftBtn = (Pfn_DirectOutput_RegisterSoftButtonCallback)GetProcAddress(dll, "DirectOutput_RegisterSoftButtonCallback");
 	hr = fnRegSoftBtn(m_devices[0], OnSoftButtonChanged, this);
 	return hr;
@@ -216,7 +253,7 @@ HRESULT DirectOutputFn::registerSoftBtnCallback()
 */
 HRESULT DirectOutputFn::registerPageCallback()
 {
-	cout << "Registering page callback... ";
+	std::cout << "Registering page callback... " << std::endl;
 	Pfn_DirectOutput_RegisterPageCallback fnRegPageCallback = (Pfn_DirectOutput_RegisterPageCallback)GetProcAddress(dll, "DirectOutput_RegisterPageCallback");
 	hr = fnRegPageCallback(m_devices[0], OnPageChanged, this);
 	return hr;
@@ -230,7 +267,7 @@ HRESULT DirectOutputFn::registerPageCallback()
 */
 HRESULT DirectOutputFn::unRegisterSoftBtnCallback()
 {
-	cout << "Unregistering soft button callback... ";
+	std::cout << "Unregistering soft button callback... " << std::endl;
 	Pfn_DirectOutput_RegisterSoftButtonCallback fnRegSoftBtn = (Pfn_DirectOutput_RegisterSoftButtonCallback)GetProcAddress(dll, "DirectOutput_RegisterSoftButtonCallback");
 	hr = fnRegSoftBtn(m_devices[0], NULL, NULL);
 	return hr;
@@ -244,7 +281,7 @@ HRESULT DirectOutputFn::unRegisterSoftBtnCallback()
 */
 HRESULT DirectOutputFn::unRegisterPageCallback()
 {
-	cout << "Unregistering page callback... ";
+	std::cout << "Unregistering page callback... " << std::endl;
 	Pfn_DirectOutput_RegisterPageCallback fnRegPageCallback = (Pfn_DirectOutput_RegisterPageCallback)GetProcAddress(dll, "DirectOutput_RegisterPageCallback");
 	hr = fnRegPageCallback(m_devices[0], NULL, NULL);
 	return hr;
@@ -259,23 +296,6 @@ HRESULT DirectOutputFn::unRegisterPageCallback()
 int DirectOutputFn::getCurrentPage()
 {
 	return currentPage;
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: none
-
-	FUNCTION: This function prints out the selected string based on the predefined page limits in the EliteDangerousX52MFD.cpp. It is not hardcoded only something I selected, I am not sure the hard limit of the device yet.
-			So far this is neccessary since I cannot yet figure out why strings can't be set on inactive created pages, it always returns an error.
-			Also, the default profile page cannot be removed so there will always be an extra page that is designated for displaying the mode name, current button selected, and profile name.
-			Plus reprinting the same string too fast causes the display to crash...
-*/
-void DirectOutputFn::handlePageChange()
-{
-	if (0 <= currentPage && currentPage < JSONDataStructure::PAGES) 
-	{
-		updatePage(currentPage);
-	}
 }
 
 
@@ -322,7 +342,7 @@ void __stdcall DirectOutputFn::OnPageChanged(void * hDevice, DWORD dwPage, bool 
 {
 	DirectOutputFn* pThis = (DirectOutputFn*)pCtxt;
 	pThis->currentPage = dwPage;
-	pThis->handlePageChange();
+	pThis->refresDisplay();
 }
 
 void __stdcall DirectOutputFn::OnSoftButtonChanged(void * hDevice, DWORD dwButtons, void * pCtxt)
@@ -338,6 +358,15 @@ void __stdcall DirectOutputFn::OnSoftButtonChanged(void * hDevice, DWORD dwButto
 	}
 }
 
+void DirectOutputFn::updatePageLine(int page, int newLineNumber)
+{
+	auto pageData = displayData->pages[page];
+	int currentLine = currentPageLine[page];
+
+	// clamp current line within the available lines
+	currentPageLine[page] = std::min(std::max(newLineNumber, 0), (int)pageData.lines.size() - 1);
+}
+
 /*
 	PARAMETERS: int direction -> int value to determine if the user wants to scroll down or up. Value of 1 will scroll down, value of -1 will scroll up.
 	RETURNS: none
@@ -346,96 +375,36 @@ void __stdcall DirectOutputFn::OnSoftButtonChanged(void * hDevice, DWORD dwButto
 */
 void DirectOutputFn::updatePageOnScroll(int direction)
 {
-	int lines;
-	switch (currentPage)
-	{
-	case 0:
-		jsonDataClass.cmdr.currentLine += direction;
-		jsonDataClass.cmdr.currentLine = jsonDataClass.cmdr.currentLine % 10;
-		break;
-	case 1:
-		if (jsonDataClass.loc.lines.size() > 3)
-		{
-			jsonDataClass.loc.currentLine += direction;
-			jsonDataClass.loc.currentLine = jsonDataClass.loc.currentLine % jsonDataClass.loc.lines.size();
-		}
-		else
-		{
-			jsonDataClass.loc.currentLine = 0;
-		}
-		break;
+	int currentLine = currentPageLine[currentPage];
 
-	case 2:
-		lines = jsonDataClass.getExplorationPage()->lines.size();
-		if (lines > 3)
-		{
-			jsonDataClass.expl.currentLine += direction;
-			jsonDataClass.expl.currentLine = jsonDataClass.expl.currentLine % lines;
-		}
-		else
-		{
-			jsonDataClass.expl.currentLine = 0;
-		}
-		break;
+	// clamp current line within the available lines
+	updatePageLine(currentPage, currentLine + direction);
 
-	case 3:
-		lines = jsonDataClass.getCargoPage()->lines.size();
-		if (lines > 3)
-		{
-			jsonDataClass.cargo.currentLine += direction;
-			jsonDataClass.cargo.currentLine = jsonDataClass.cargo.currentLine % lines;
-		}
-		else
-		{
-			jsonDataClass.cargo.currentLine = 0;
-		}
-		break;
-		break;
-
-	default:
-		break;
-	}
-	updatePage(currentPage);
+	refresDisplay();
 }
 
-/*
-	PARAMETERS: int pageNumber -> corresponds to the page that needs to be rewritten
-	RETURNS: none
 
-	FUNCTION: Rewrites the data on the selected screen, keeps scroll position between pages and usually used after retrieving new information.
-*/
-void DirectOutputFn::updatePage(int pageNumber)
+
+
+// Refresh the MFD display
+void DirectOutputFn::refresDisplay() 
 {
-	std::unique_ptr<JSONDataStructure::mdfPage> page;
-	switch (pageNumber)
-	{
-	case 0:
-		page = jsonDataClass.getCmdrPage();
-		break;
-	case 1:
-		page = jsonDataClass.getLocationPage();
-		break;
-	case 2:
-		page = jsonDataClass.getExplorationPage();
-		break;
-	case 3:
-		page = jsonDataClass.getCargoPage();
-		break;
-	}
+	int line = currentPageLine[currentPage];
+
+	auto page = displayData->pages[currentPage];
 
 	// Set the lines we are looking for
-	for (int i = 0; i < 3 && i < page->lines.size(); i++)
+	for (int i = 0; i < 3 && i < page.lines.size() - line; i++)
 	{
-		int idx = (page->currentLine + i) % page->lines.size();
-		std::wstring line = page->lines.at(idx);
+		int idx = line + i;
+		std::wstring line = strToWStr(page.lines[idx]);
 		wchar_t* wc = const_cast<wchar_t*>(line.c_str());
-		setString(pageNumber, i, wc);
+		setString(currentPage, i, wc);
 	}
 
 	// fill any remaining lines with blanks
-	for (int i = page->lines.size(); i < 3; i++) {
-		setString(pageNumber, i, L"");
+	for (int i = page.lines.size() - line; i < 3; i++) {
+		setString(currentPage, i, L"");
 	}
-
 
 }

@@ -8,7 +8,6 @@
 class JSONDataStructure
 {
 	typedef std::vector<std::wstring> v_strList;
-
 	
 
 public:

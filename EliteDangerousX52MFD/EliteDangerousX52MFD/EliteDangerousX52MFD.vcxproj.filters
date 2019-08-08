@@ -30,6 +30,12 @@
     <ClInclude Include="JSONDataStructure.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="JSONReader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="displaydata.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -42,6 +48,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="JSONDataStructure.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="JSONReader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

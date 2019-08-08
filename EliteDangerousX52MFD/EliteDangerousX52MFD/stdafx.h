@@ -24,3 +24,4 @@
 
 #include <Windows.h>
 #undef max
+#undef min

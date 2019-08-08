@@ -9,18 +9,15 @@
 */
 
 #include "stdafx.h"
+#include "DepInclude/cxxopts.hpp"
 #include <ShlObj.h>
 #include "DirectOutputFn.h"
-#include "JSONDataStructure.h"
+#include "JSONReader.h"
 
-using namespace std;
 
 // DirectOutput function object
 // Creation of this object automatically loads in DirectOutput but it still needs to be initialized
 DirectOutputFn fn;
-
-// Accessor to JSON file
-JSONDataStructure jsonDataClass;
 
 // Text filepath holders
 TCHAR profileFilepath[260];
@@ -28,34 +25,79 @@ TCHAR defaultDirectory[260];
 TCHAR journalFolderpath[260];
 TCHAR currentJournal[260];
 
+std::string inputFile;
+std::string profileFile;
+
 // Instance checking
 bool foundProfile = false;
 bool closeOnWindowX = false;
 
 // Internal Functions
+void initDirectOutput();
 void checkHR(HRESULT hr);
-void txtFileCheck();
-void getFilepaths();
-void createTxtFile();
-bool getFilePathName();
-void determineJournalFilepath();
-BOOL determineWriteTime();
-void readJournal();
+
 void waitForJournalUpdate();
 void cleanupAndClose();
 BOOL controlHandler(DWORD fdwCtrlType);
 
-int main()
-{
-	// Alert version number
-	cout << "\n---- EliteDangerousX52MFD  v 1.1.2 ----\n\n";
 
+int main(int argc, char** argv)
+{
 	// Setup control handling, if app is closed by other means. (Ctrl + C or hitting the 'X' button)
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE)controlHandler, TRUE);
 
-	// Create map to perform functions based on the event input
-	jsonDataClass.createMap();
 
+	cxxopts::Options options("X52MDF-JSON-DRIVER", "Helps drive a X52 PRO MDF from a JSON file");
+	options
+		.allow_unrecognised_options()
+		.positional_help("<input>")
+		.show_positional_help();	
+
+	options.add_options()
+		("h,help", "Print help")
+		("p,profile", "Profile file to load", cxxopts::value<std::string>(), "FILE")
+		("input", "Input JSON file to monitor", cxxopts::value<std::vector<std::string>>(), "FILE")
+		;
+
+	options.parse_positional({"input"});
+
+	auto args = options.parse(argc, argv);
+
+	if (args.count("help"))
+	{
+		std::cout << options.help({ "", "Group" }) << std::endl;
+		exit(0);
+	}
+
+	if (args.count("input") == 0)
+	{
+		std::cout << options.help({ "", "Group" }) << std::endl;
+		exit(0);
+	}
+
+	if (args.count("profile"))
+	{
+		profileFile = args["profile"].as<std::string>();
+	}
+
+	initDirectOutput();
+
+	inputFile = args["input"].as<std::vector<std::string>>().at(0);
+	std::cout << "Reading from JSON file = " << inputFile << std::endl;	
+	auto data = reader::ReadJSONFile(inputFile);
+
+	fn.SetOrUpdateDisplayData(std::move(data));
+
+
+	std::cout << "\nPress ENTER to close this application.";
+	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+	return 0;
+}
+
+
+void initDirectOutput()
+{
 	// Initialize DirectOutput
 	checkHR(fn.Initialize(L"EliteDangerousX52MFD"));
 
@@ -65,22 +107,28 @@ int main()
 	// Gets the enumerated device
 	if (!fn.GetDeviceType())
 	{
-		cout << "\nPress ENTER to close this application.";
-		cin.ignore(numeric_limits<streamsize>::max(), '\n');
-		return 0;
+		std::cout << "\nPress ENTER to close this application.";
+		std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		ExitProcess(0);
 	}
 
-	// .txt file check
-	txtFileCheck();
-
+	//TODO(pbirk): Move profile setup here
 	// Set the profile, if provided
-	if (foundProfile)
+	if (profileFile.length() > 0)
 	{
-		checkHR(fn.setDeviceProfile(profileFilepath));
+		std::ifstream profile(profileFile);
+		if (profile.good()) {
+			checkHR(fn.setDeviceProfile(profileFile));
+		}
+		else
+		{
+			std::cout << "Couldn't link a profile from nonexisting file " << profileFile << std::endl;
+		}
+		
 	}
 	else
 	{
-		cout << "Couldn't link a profile since one was not provided!\n";
+		std::cout << "Couldn't link a profile since one was not provided!" << std::endl;
 	}
 
 	// Register right soft button clicks and scrolls
@@ -88,79 +136,7 @@ int main()
 
 	// Register page change callback
 	checkHR(fn.registerPageCallback());
-	cout << "Setup Complete.\n\n";
 
-	// Add pages
-	for (int i = 0; i < JSONDataStructure::PAGES; i++)
-	{
-		if (i == 0)
-		{
-			checkHR(fn.setPage(0, FLAG_SET_AS_ACTIVE));
-		}
-		else
-		{
-			checkHR(fn.setPage(i, 0));
-		}
-	}
-
-	// Determine if journal folder path exists
-	if (journalFolderpath[0] == _T('\0'))
-	{
-		cout << "\nCan't find the journal folder." << endl;
-		cout << "Please delete EDX52Settings.txt and restart this application" << endl;
-		cout << "Press enter to cleanup and quit..." << endl;
-		cin.ignore(numeric_limits<streamsize>::max(), '\n');
-		cleanupAndClose();
-		return 0;
-	}
-
-	// Determine initial file name of the Journal
-	determineJournalFilepath();
-	/*
-	// Determine if the current journal found could be the latest
-	if (!determineWriteTime())
-	{
-		cout << "File was created more than 10 minutes ago...Probably not the latest journal.\n";
-		cout << "Waiting for the latest journal to be created\n";
-		waitForJournalUpdate();
-		cout << "Got latest Journal." << endl;
-	}
-	*/
-	// Start first file reading from first line
-	jsonDataClass.readLine = 0;
-
-	// First file read, set continue action to false until another file is created
-	jsonDataClass.continueEvent = false;
-
-	// Set all line numbers to 0
-	jsonDataClass.cmdr.currentLine = 0;
-	jsonDataClass.loc.currentLine = 0;
-	jsonDataClass.expl.currentLine = 0;
-
-	// Main loop
-	do
-	{
-		// Read line by line of the journal to display new information
-		readJournal();
-
-		// When reading the journal and an event of 'Continue' is found, a new file is generated and it needs to be found.
-		if (jsonDataClass.continueEvent)
-		{
-			waitForJournalUpdate();
-			jsonDataClass.continueEvent = false;
-			jsonDataClass.readLine = 0;
-		}
-		else
-		{
-			// Haven't found a continue event, wait until new information is shown
-			waitForJournalUpdate();
-		}
-
-	} while (!closeOnWindowX);
-
-	// No cleanup neccessary as it is done when the window closes.
-
-	return 0;
 }
 
 /*
@@ -177,349 +153,12 @@ void checkHR(HRESULT hr)
 {
 	if (hr == S_OK)
 	{
-		cout << "DONE.\n";
+		std::cout << "DONE.\n";
 	}
 	else
 	{
-		cout << "FAILED/ hr = " << hr << endl;
+		std::cout << "FAILED/ hr = " << hr << std::endl;
 	}
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: none
-
-	FUNCTION: Looks for the existance of the text file in the project directory if it can't be found, prompt the user to select various file locations. Otherwise, load in the required filepaths
-*/
-void txtFileCheck()
-{
-	// Create .txt file for filepaths
-	cout << "\nLooking for text file... ";
-	char *filename = "EDX52Settings.txt";
-	struct stat buffer;
-	if (stat(filename, &buffer) == 0)
-	{
-		cout << "FOUND.\nLoading filepaths.\n";
-		foundProfile = true;
-		ifstream myFile("EDX52Settings.txt");
-		string line;
-		int lineNumber = 0;
-		size_t strSize;
-		// Load in each of the required filepaths per line
-		if (myFile.is_open())
-		{
-			while (getline(myFile, line))
-			{
-				cout << line << endl;
-				switch (lineNumber)
-				{
-				case 0:
-					strSize = line.length();
-					for (size_t i = 0; i < strSize; i++)
-					{
-						profileFilepath[i] = line[i];
-					}
-					lineNumber++;
-					break;
-				case 1:
-					strSize = line.length();
-					for (size_t i = 0; i < strSize; i++)
-					{
-						defaultDirectory[i] = line[i];
-					}
-					lineNumber++;
-					break;
-				case 2:
-					strSize = line.length();
-					for (size_t i = 0; i < strSize; i++)
-					{
-						journalFolderpath[i] = line[i];
-					}
-					break;
-				default:
-					break;
-				}
-			}
-			myFile.close();
-			cout << endl;
-		}
-	}
-	else {
-		// Couldn't find file. Need to create it
-		// Get and save the filepaths
-		getFilepaths();
-		// Create the txt file with the filepaths
-		createTxtFile();
-		// Read in the newly created txt file
-		txtFileCheck();
-	}
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: none
-
-	FUNCTION: Prompts the user to select the filepaths corresponding to the profile location and folder of the Journals
-*/
-void getFilepaths()
-{
-	// Get the current directory so it can be restored after the files have been found
-	GetCurrentDirectory(MAX_PATH, defaultDirectory);
-
-	// Get filepaths for the profile to be used
-	cout << "Couldn't find file. Creating file \"EDX52Settings.txt\"...\n\n";
-	cout << "Please select your profile to use. This will allow use of pre-assigned keybindings, colors, settings, etc.\n";
-	cout << "The default location of the profiles under Saitek is -> C:\\Users\\Public\\Public Documents\\SmartTechnology Profiles\n";
-	cout << "The default location of the profiles under Logitech is -> C:\\Users\\Public\\Public Documents\\Logitech\\X52 Professional\n";
-	if (getFilePathName())
-	{
-		cout << "Got profile filepath: ";
-		wcout << profileFilepath << endl;
-		foundProfile = true;
-	}
-	else
-	{
-		cout << "Couldn't get the profile or the operation was canceled.\n";
-		foundProfile = false;
-	}
-
-	// Get folder location of the Journals
-	cout << "\nPlease select the folder of the Journal files.\n";
-	cout << "The default location is -> C:\\Users\\User Name\\Saved Games\\Frontier Developments\\Elite Dangerous\\\n";
-
-	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-	if (SUCCEEDED(hr))
-	{
-		IFileOpenDialog *pFileOpen;
-		// FileOpenDialog object
-		hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL, IID_IFileDialog, reinterpret_cast<void**>(&pFileOpen));
-		if (SUCCEEDED(hr))
-		{
-			// Select folder only
-			DWORD dwOptions;
-			if (SUCCEEDED(pFileOpen->GetOptions(&dwOptions)))
-			{
-				pFileOpen->SetOptions(dwOptions | FOS_PICKFOLDERS);
-			}
-			// Show Open dialog box
-			hr = pFileOpen->Show(NULL);
-
-			// Get the filename from the dialog box
-			if (SUCCEEDED(hr))
-			{
-				IShellItem *pItem;
-				hr = pFileOpen->GetResult(&pItem);
-				if (SUCCEEDED(hr))
-				{
-					PWSTR pszFilePath;
-					hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath);
-					pItem->Release();
-
-					// Copy folder filepath to global variable so it can be saved to the text file for later retrieval
-					_tcscpy_s(journalFolderpath, pszFilePath);
-				}
-			}
-			else
-			{
-				cout << "Couldn't get the folder path or operation was cancelled.\n";
-				cout << "Close the program, delete the text file, and repeat this opertaion while finding the folder path.\n";
-			}
-			pFileOpen->Release();
-		}
-		CoUninitialize();
-	}
-	SetCurrentDirectory(defaultDirectory);
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: none
-
-	FUNCTION: Creates the text file with the provided filepaths. Each path is separated by a new line so it can easily be read in the next time the application is run.
-*/
-void createTxtFile() {
-	// Create the txt file
-	cout << "Creating txt file...";
-	TCHAR currentDirectoy[MAX_PATH];
-	TCHAR txtFile[MAX_PATH];
-	GetCurrentDirectory(MAX_PATH, currentDirectoy);
-	swprintf_s(txtFile, _T("%s\\EDX52Settings.txt"), currentDirectoy);
-	HANDLE hFile = CreateFile(txtFile, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	// Add the filepaths
-	cout << "DONE.\nWriting to txt file selected locations.\n";
-	wofstream myFile;
-	myFile.open("EDX52Settings.txt");
-	myFile << profileFilepath << "\n";
-	myFile << defaultDirectory << "\n";
-	myFile << journalFolderpath << "\n";
-	myFile.close();
-	cout << "Wrote to txt file.\n\n";
-}
-
-
-/*
-	PARAMETERS: none
-	RETURNS: bool value -> alerts the program if the filepaths are correct and can be opened successfully. Otherwise, the program will alert the user that the operation was cancelled or a filepath wasn't selected
-
-	FUNCTION: Prompts the user to select the required filepath of the HOTAS profile
-*/
-bool getFilePathName()
-{
-	OPENFILENAME ofn;
-	HWND hwnd = 0;
-
-	// Initialize OPENFILENAME
-	ZeroMemory(&ofn, sizeof(ofn));
-	ofn.lStructSize = sizeof(ofn);
-	ofn.hwndOwner = hwnd;
-
-	ofn.lpstrFile = profileFilepath;
-	ofn.lpstrFile[0] = '\0';
-	ofn.nMaxFile = sizeof(profileFilepath);
-	ofn.lpstrFilter = _T("PR0 File (.pr0)\0*.pr0*\0\0");
-
-	ofn.nFilterIndex = 1;
-	ofn.lpstrFileTitle = NULL;
-	ofn.nMaxFileTitle = 0;
-	ofn.lpstrInitialDir = L"C:\\";
-	ofn.Flags = OFN_PATHMUSTEXIST;
-
-	// Display the Open dialog box. 
-	if (GetOpenFileName(&ofn) == TRUE) {
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: none
-
-	FUNCTION: Gets and sets the latest written/saved to journal. Will be called when needing to get a new journal file either at the beginning of playtime or when a new part is needed.
-*/
-void determineJournalFilepath()
-{
-	// Check directory for latest created files
-	TCHAR tempCurrentFile[260];
-	StringCchCopy(tempCurrentFile, MAX_PATH, journalFolderpath);
-	StringCchCat(tempCurrentFile, MAX_PATH, TEXT("\\*log"));
-
-	WIN32_FIND_DATA currentFileData;
-	HANDLE file = FindFirstFile(tempCurrentFile, &currentFileData);
-
-	struct FileInfo
-	{
-		HANDLE h;
-		WIN32_FIND_DATA data;
-	} newestFile;
-
-	// Determine the latest modified file within the Journal folder
-	if (file != INVALID_HANDLE_VALUE)
-	{
-		newestFile.h = file;
-		newestFile.data = currentFileData;
-
-		while (FindNextFile(file, &currentFileData))
-		{
-			if (CompareFileTime(&currentFileData.ftLastWriteTime, &newestFile.data.ftLastWriteTime) > 0)
-			{
-				newestFile.h = file;
-				newestFile.data = currentFileData;
-			}
-		}
-		StringCchCopy(currentJournal, MAX_PATH, journalFolderpath);
-		StringCchCat(currentJournal, MAX_PATH, TEXT("\\"));
-		StringCchCat(currentJournal, MAX_PATH, newestFile.data.cFileName);
-		FindClose(file);
-	}
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: bool value -> true if the file was created in the last 10 minutes, false if not
-
-	FUNCTION: This will be used to get a rough estimate of when the latest journal was created. I would think anything longer than 10 minutes ago would indicate a journal relating to a different play session.
-*/
-BOOL determineWriteTime()
-{
-	// Do time comparison
-	FILETIME ftCreate, ftAccess, ftWrite;
-	SYSTEMTIME stUTC, stLocal;
-	DWORD dwRet;
-
-	HANDLE hFile = CreateFile(currentJournal, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	if (!GetFileTime(hFile, &ftCreate, &ftAccess, &ftWrite)) {
-		printf("\nGetFileTime failed.\n");
-		cout << "No journals detected. Please run Elite Dangerous at least once and then restart this program." << endl;
-		ExitProcess(GetLastError());
-	}
-
-	FileTimeToSystemTime(&ftWrite, &stUTC);
-	SystemTimeToTzSpecificLocalTime(NULL, &stUTC, &stLocal);
-
-	CloseHandle(hFile);
-
-	// Determine if created within the last 10 minutes
-	SYSTEMTIME currentLocal;
-	union ftTime { FILETIME ft; ULARGE_INTEGER uli; };
-
-	ftTime t1;
-	ftTime t2;
-
-	GetLocalTime(&currentLocal);
-
-	SystemTimeToFileTime(&currentLocal, &t1.ft);
-	SystemTimeToFileTime(&stLocal, &t2.ft);
-
-	__int64 diff;
-	diff = t1.uli.QuadPart - t2.uli.QuadPart;
-	diff /= 600000000; // To minutes
-
-	// Less than 10 minute check
-	if (diff < 10)
-	{
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
-/*
-	PARAMETERS: none
-	RETURNS: none
-
-	FUNCTION: Reads the currently selected journal and updates passes the selected line to the JSON file to change to a JSON object where the event can be determined.
-*/
-void readJournal()
-{
-	// Read events from the journal line by line and pass to JSONDataStructure to process until end of file
-	ifstream cmdrDataFile(currentJournal);
-	if (cmdrDataFile.is_open())
-	{
-		string line;
-		unsigned int tempLine = 0;
-		while (getline(cmdrDataFile, line))
-		{
-			if (tempLine == jsonDataClass.readLine)
-			{
-				jsonDataClass.readStoreJSON(line);
-				jsonDataClass.readLine++;
-			}
-			tempLine++;
-		}
-	}
-
-	cmdrDataFile.close();
-
-	// Update the page to the most relevant data
-	fn.updatePage(fn.getCurrentPage());
 }
 
 /*
@@ -531,19 +170,19 @@ void readJournal()
 void waitForJournalUpdate()
 {
 	DWORD dwWaitStatus;
-	HANDLE dwChangeHandle[2];
+	HANDLE dwChangeHandle;
 
 	// Watch for new Journal creations
-	dwChangeHandle[0] = FindFirstChangeNotification(journalFolderpath, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
-	if (dwChangeHandle[0] == INVALID_HANDLE_VALUE)
+	dwChangeHandle = FindFirstChangeNotification(journalFolderpath, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME);
+	if (dwChangeHandle == INVALID_HANDLE_VALUE)
 	{
 		printf("\nFindFirstChangeNotification failed.\n");
-		FindCloseChangeNotification(dwChangeHandle[0]);
+		FindCloseChangeNotification(dwChangeHandle);
 		ExitProcess(GetLastError());
 	}
 
 	// Validity check, make sure the handle notification was set correctly
-	if (dwChangeHandle[0] == NULL || dwChangeHandle[1] == NULL)
+	if (dwChangeHandle == NULL)
 	{
 		printf("\nUnexpected NULL FindFirstChangeNotification\n");
 		ExitProcess(GetLastError());
@@ -553,7 +192,7 @@ void waitForJournalUpdate()
 	long prevPos;
 	if (currentJournal[0] != _T('\0'))
 	{
-		ifstream journalFile(currentJournal, ios::binary | ios::ate);
+		std::ifstream journalFile(currentJournal, std::ios::binary | std::ios::ate);
 		prevPos = journalFile.tellg();
 		journalFile.close();
 	}
@@ -562,7 +201,7 @@ void waitForJournalUpdate()
 	bool changeDetected = false;
 	while (!changeDetected)
 	{
-		dwWaitStatus = WaitForSingleObject(dwChangeHandle[0], 1000);
+		dwWaitStatus = WaitForSingleObject(dwChangeHandle, 1000);
 		switch (dwWaitStatus)
 		{
 		/*
@@ -573,12 +212,11 @@ void waitForJournalUpdate()
 		case WAIT_OBJECT_0:
 			// Write to file was detected
 			changeDetected = true;
-			if (FindNextChangeNotification(dwChangeHandle[0]) == FALSE)
+			if (FindNextChangeNotification(dwChangeHandle) == FALSE)
 			{
 				printf("\nFindFirstChangeNotification failed.\n");
 				ExitProcess(GetLastError());
 			}
-			determineJournalFilepath();
 			break;
 
 		/*
@@ -591,7 +229,7 @@ void waitForJournalUpdate()
 		case WAIT_TIMEOUT:
 			if (currentJournal[0] != _T('\0'))
 			{
-				ifstream journalFile(currentJournal, ios::binary | ios::ate);
+				std::ifstream journalFile(currentJournal, std::ios::binary | std::ios::ate);
 				long newPos = journalFile.tellg();
 				journalFile.close();
 				if (newPos > prevPos)
@@ -607,7 +245,7 @@ void waitForJournalUpdate()
 			break;
 		}
 	}
-	CloseHandle(dwChangeHandle[0]);
+	FindCloseChangeNotification(dwChangeHandle);
 }
 
 /*
