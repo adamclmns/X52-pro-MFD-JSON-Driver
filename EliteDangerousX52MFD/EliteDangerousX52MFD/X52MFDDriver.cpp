@@ -20,6 +20,8 @@
 #include <codecvt>
 #include <string>
 
+#include <signal.h>
+
 
 
 // DirectOutput function object
@@ -50,13 +52,21 @@ void onFileChanged();
 
 void cleanupAndClose();
 BOOL controlHandler(DWORD fdwCtrlType);
+int signalhandler(int, int);
 
 
 int main(int argc, char** argv)
 {
 	// Setup control handling, if app is closed by other means. (Ctrl + C or hitting the 'X' button)
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE)controlHandler, TRUE);
-
+	_crt_signal_t err = signal(SIGTERM, (_crt_signal_t)signalhandler);
+	if (err == SIG_ERR) {
+		std::cout << "Error setting signal handler!" << std::endl;
+	}
+	err = signal(SIGINT, (_crt_signal_t)signalhandler);
+	if (err == SIG_ERR) {
+		std::cout << "Error setting signal handler!" << std::endl;
+	}
 	
 
 	cxxopts::Options options("X52MDF-JSON-DRIVER", "Helps drive a X52 PRO MDF from a JSON file");
@@ -287,4 +297,10 @@ BOOL controlHandler(DWORD fdwCtrlType) {
 	default:
 		return FALSE;
 	}
+}
+
+int signalhandler(int signal, int subcode) {
+	std::cout << "Caught signal" << signal << std::endl;
+	cleanupAndClose();
+	return 0;
 }
