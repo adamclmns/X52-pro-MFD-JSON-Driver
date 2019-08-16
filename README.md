@@ -8,7 +8,43 @@ Grab the latest release version of this app. Unzip it to a location of your choi
 
 If the console window is clicked it will pause itself because it is waiting for input so, for it to continue functioning, hit the Esc key. To quit hit the 'X' button on the window or using 'Ctrl + C' in the console window.
 
-Run the program with the path of the JSON file as command line input.
+Run the program with the path of the JSON file as command line input, and the pages and lines will be shown on the MFD of your HOTAS.
+
+## JSON file format
+The JSON file format is an object of the following structure 
+```json
+{
+  "pages": [
+    {
+      "lines": [
+        "Text line 1",
+        "Text line 2",
+        "..."
+      ]
+    },
+    {
+      "lines": [
+        "Text line 1",
+        "Text line 2",
+        "..."
+      ]
+    },
+    {
+      "lines": [
+       "Text line 1",
+        "Text line 2",
+        "..."
+      ]
+    }
+  ]
+}
+```
+
+The root object must have a `pages` property, which must be an array of "page" objects.
+
+Each "page" object must have a `lines` property, which is an array of strings.
+
+> **WARNING** The driver does not support changing the number of pages on the fly. The only way to add or remove pages is to restart the driver!
 
 ### Thanks
 Frontier Developments for Elite Dangerous
