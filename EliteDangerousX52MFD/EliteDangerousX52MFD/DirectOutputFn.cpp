@@ -351,7 +351,10 @@ void __stdcall DirectOutputFn::OnPageChanged(void * hDevice, DWORD dwPage, bool 
 void __stdcall DirectOutputFn::OnSoftButtonChanged(void * hDevice, DWORD dwButtons, void * pCtxt)
 {
 	DirectOutputFn* pThis = (DirectOutputFn*)pCtxt;
-	if (dwButtons & SoftButton_Up)
+	if (dwButtons & SoftButton_Select) {
+		std::cout << ">MFD-SELECT PRESSED<" << std::endl;
+	}
+	else if (dwButtons & SoftButton_Up)
 	{
 		pThis->updatePageOnScroll(-1);
 	}
