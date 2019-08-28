@@ -10,6 +10,13 @@ If the console window is clicked it will pause itself because it is waiting for 
 
 Run the program with the path of the JSON file as command line input, and the pages and lines will be shown on the MFD of your HOTAS.
 
+## Button press output
+
+The tool will output the string `>MFD-SELECT PRESSED<` on standard-out when the MFD-select button on the HOTAS is pressed.
+
+This can be used to react to button presses in client programs.
+
+
 ## JSON file format
 The JSON file format is an object of the following structure 
 ```json
